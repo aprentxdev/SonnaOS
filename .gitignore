@@ -1,0 +1,13 @@
+build/
+*.o
+*.d
+*.elf
+
+.cache/
+.vscode
+.vs
+compile_commands.json
+
+limine/
+spleen/
+spleen*.tar.gz

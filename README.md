@@ -14,8 +14,6 @@ Next: PSF2, GDT, TSS, IDT
 
 ![screenshot](sonnaos.png)
 
-
-
 ### Requirements
 - clang + ld.lld
 - QEMU + OVMF

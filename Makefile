@@ -4,15 +4,16 @@ LD = ld.lld
 CFLAGS = -target x86_64-unknown-elf \
          -ffreestanding -fno-pic -fno-pie -mno-red-zone \
          -fno-stack-protector -fshort-wchar -Wall -O2 \
-		 -Ikernel -Ikernel/libkernel/include \
+		 -Ikernel \
 		 -MMD -MP -mcmodel=kernel -fno-omit-frame-pointer \
 		 -mno-sse -mno-sse2 -mno-avx -mno-avx2 -mno-avx512f
 
-LDFLAGS = -T x86-64.lds -nostdlib -g
+LDFLAGS = -T x86-64.lds -nostdlib
 
 LIMINE_DIR ?= ./limine
 QEMU ?= qemu-system-x86_64
 QEMU_FLAGS ?= -M q35 -m 2G -serial stdio -display gtk \
+			-device VGA,xres=1920,yres=1080 \
 			-no-reboot -no-shutdown
 
 OVMF_CODE ?= $(firstword \
@@ -30,10 +31,9 @@ ifeq ($(OVMF_CODE),)
 $(error OVMF not found.)
 endif
 
-
 BUILD_DIR = build
 SRC_DIR = kernel
-ESP_DIR = $(BUILD_DIR)/esp
+ESP_DIR = $(BUILD_DIR)/ESP
 
 SPLEEN_URL ?= https://github.com/fcambus/spleen/releases/download/2.2.0/spleen-2.2.0.tar.gz
 SPLEEN_TAR ?= spleen-2.2.0.tar.gz
@@ -42,7 +42,8 @@ SPLEEN_DIR ?= spleen
 TARGET = $(BUILD_DIR)/estella.elf
 
 C_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c')
-OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES))
+ASM_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.S')
+OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES)) 
 DEPENDS := $(OBJECTS:.o=.d)
 
 all: limine spleen $(TARGET)
@@ -69,6 +70,10 @@ spleen:
 	rm -f $(SPLEEN_TAR)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 

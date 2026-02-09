@@ -2,18 +2,26 @@
 Writing an operating system because I want to occupy my time...  
 
 ## Kernel
-**Estella** - x86_64 EFI kernel using the Limine bootloader.  
+**Estella** - x86_64 EFI kernel using the Limine bootloader protocol.
 
 ### Current status
-- Boots via Limine kernel protocol
-- GDT: kernel and user segments
-- Simple bitmap-based physical memory manager
-- Framebuffer console with Spleen 8x16 font (PSF1)
-- Debug output: boot info, memory map, PMM alloc/free tests
+- Boots via Limine
+- GDT + TSS (kernel and user segments)
+- IDT + basic exception handling (#DE, #UD, #DF, #GP, #PF)
+- Simple bitmap PMM with alloc/free tests
+- Framebuffer console (Spleen 8x16 PSF1 font)
+- Debug output: boot info, memory map, PMM tests
 
-Next: IDT, PSF2, TSS
+Next:
+- IRQ handling
+- Extend IDT
+- PSF2 font support
+- Serial console for better debugging
+- Paging + virtual memory + kernel heap  
 
+---
 ![screenshot](sonnaos.png)
+---
 
 ### Requirements
 - clang + ld.lld

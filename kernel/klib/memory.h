@@ -1,5 +1,5 @@
-#ifndef LIBKERNEL_MEMORY_H
-#define LIBKERNEL_MEMORY_H
+#ifndef KLIB_MEMORY_H
+#define KLIB_MEMORY_H
 
 #include <stdint.h>
 #include <stddef.h>

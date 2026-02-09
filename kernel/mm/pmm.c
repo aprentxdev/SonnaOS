@@ -1,6 +1,7 @@
 // Physical memory manager using a simple bitmap
-#include "pmm.h"
+#include <mm/pmm.h>
 #include <stdbool.h>
+#include <klib/memory.h>
 
 static uint8_t *pmm_bitmap; 
 static size_t pmm_bitmap_bytes;
@@ -22,25 +23,6 @@ static bool is_ram_type(uint64_t type) {
     return type == LIMINE_MEMMAP_USABLE
         || type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE
         || type == LIMINE_MEMMAP_ACPI_RECLAIMABLE;
-}
-
-// fills bitmap using rep stosb - safe for now. Using memset is currently unsafe, because IDT is not set
-static void pmm_fill_bitmap(uint8_t value) {
-    uint8_t *ptr = pmm_bitmap;
-    size_t bytes = pmm_bitmap_bytes;
-
-    __asm__ volatile (
-        "mov %0, %%rdi\n"
-        "mov %1, %%rcx\n"
-        "test %%rcx, %%rcx\n"
-        "jz 1f\n"
-        "mov %2, %%al\n"
-        "rep stosb\n"
-        "1:\n"
-        :
-        : "r"(ptr), "r"(bytes), "r"(value)
-        : "rdi", "rcx", "al", "memory"
-    );
 }
 
 static void pmm_set_frame(size_t frame) {
@@ -121,7 +103,7 @@ void pmm_init(const struct limine_memmap_response *memmap, uint64_t hhdm_offset)
     pmm_bitmap = (uint8_t *)(bitmap_phys + hhdm_offset);
 
     // initially everything marked as used
-    pmm_fill_bitmap(0xFF);
+    memset(pmm_bitmap, 0xFF, pmm_bitmap_bytes);
 
     pmm_free_frames_count = 0;
     pmm_used_frames_count = pmm_usable_frames_count;

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "limine.h"
+#include <limine.h>
 
 #define PSF1_MAGIC0 0x36
 #define PSF1_MAGIC1 0x04

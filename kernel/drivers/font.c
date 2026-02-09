@@ -1,7 +1,4 @@
-#include "font.h"
-#include "limine.h"
-#include <stdint.h>
-#include <stddef.h>
+#include <drivers/font.h>
 
 struct psf1_header* load_psf1_font(struct limine_file **out_glyphs) {
     extern struct limine_module_request module_request;

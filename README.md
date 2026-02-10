@@ -17,7 +17,7 @@ Next:
 - APIC, timer, keyboard
 
 ---
-![screenshot](SonnaOS.png)
+![screenshot](sonnaos.png)
 ---
 
 ### Requirements

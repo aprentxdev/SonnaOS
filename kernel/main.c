@@ -177,11 +177,11 @@ static void run_pmm_tests(void) {
         void *reuse = pmm_alloc();
         if (reuse) {
             u64_to_hex((uint64_t)reuse, addr);
-            fb_print_value("Reuse page:", addr, COL_OK, COL_OK);
+            fb_print_value("First reused page:", addr, COL_OK, COL_ADDRESS);
             fb_print("\n", 0);
             pmm_free(reuse);
         } else {
-            fb_print("Reuse failed (unexpected)\n", COL_WARNING);
+            fb_print("ERROR: Could not allocate after full free!\n", COL_FAIL);
         }
     } else {
         fb_print("FAILED - leak detected!\n", COL_FAIL);
@@ -195,7 +195,7 @@ static void run_pmm_tests(void) {
             delta_str[0] = '-';
             u64_to_dec((uint64_t)(-delta), delta_str + 1);
         }
-        fb_print_value("Delta:", delta_str, COL_FAIL, COL_FAIL);
+        fb_print_value("Leak:", delta_str, COL_FAIL, COL_FAIL);
         fb_print(" pages\n", COL_FAIL);
     }
 

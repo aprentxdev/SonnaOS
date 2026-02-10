@@ -10,6 +10,8 @@ static size_t pmm_total_frames_count;
 static size_t pmm_usable_frames_count;
 static size_t pmm_free_frames_count;
 static size_t pmm_used_frames_count;
+static size_t next_fit_hint = 0;
+uint64_t g_hhdm_offset;
 
 static uint64_t align_up(uint64_t value, uint64_t align) {
     return (value + align - 1) & ~(align - 1);
@@ -148,29 +150,62 @@ void *pmm_alloc(void) {
     return pmm_alloc_frames(1);
 }
 
-// "first-fit" allocator - simple but slow.
-void *pmm_alloc_frames(size_t count) {
-    if (count == 0 || pmm_free_frames_count < count) return NULL;
+void *pmm_alloc_zeroed(void) {
+    void *page = pmm_alloc();
+    if(page) {
+        memset(page + g_hhdm_offset, 0, PAGE_SIZE);
+    }
+    return page;
+}
 
+void *pmm_alloc_frames(size_t count) {
+    if (count == 0 || pmm_free_frames_count < count) {
+        return NULL;
+    }
+
+    size_t frame = next_fit_hint;
+    size_t wrap_point = frame;
     size_t run_start = 0;
     size_t run_length = 0;
+    bool wrapped = false;
 
-    for (size_t frame = 0; frame < pmm_bitmap_frames; frame++) {
+    while (true) {
         if (!pmm_test_frame(frame)) {
-            if (run_length == 0) run_start = frame;
+            if (run_length == 0) {
+                run_start = frame;
+            }
             run_length++;
+
             if (run_length == count) {
-                for (size_t i = 0; i < count; i++) pmm_set_frame(run_start + i);
+                for (size_t i = 0; i < count; i++) {
+                    pmm_set_frame(run_start + i);
+                }
                 pmm_free_frames_count -= count;
                 pmm_used_frames_count += count;
+
+                next_fit_hint = (run_start + count) % pmm_bitmap_frames;
                 return (void *)(run_start * PAGE_SIZE);
             }
         } else {
             run_length = 0;
         }
+
+        frame = (frame + 1) % pmm_bitmap_frames;
+        if (frame == wrap_point) {
+            if (wrapped) break;
+            wrapped = true;
+        }
     }
 
     return NULL;
+}
+
+void *pmm_alloc_frames_zeroed(size_t count) {
+    void *pages = pmm_alloc_frames(count);
+    if (pages) {
+        memset(pages + g_hhdm_offset, 0, count * PAGE_SIZE);
+    }
+    return pages;
 }
 
 void pmm_free(void *phys_addr) {

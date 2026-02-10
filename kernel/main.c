@@ -1,8 +1,3 @@
-// main.c Estella
-//
-// Entry point for the Estella kernel using the Limine bootloader protocol.
-// It initializes GDT, TSS, IDT, ISR; Initalizes framebuffer, loads font and display boot info and some tests.
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -11,14 +6,15 @@
 
 #include <klib/memory.h>
 #include <klib/string.h>
-#include <drivers/font.h>
-#include <drivers/fbtext.h>
-#include <mm/pmm.h>
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
+#include <mm/pmm.h>
+#include <drivers/font.h>
+#include <drivers/fbtext.h>
+#include <drivers/serial.h>
 #include <colors.h>
 
-#define ESTELLA_VERSION "v0.Estella.3.0"
+#define ESTELLA_VERSION "v0.Estella.3.1"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -70,6 +66,7 @@ void hcf(void) {
         asm ("hlt");
     }
 }
+
 static void print_system_info(struct limine_framebuffer *fb) {
     fb_print_value("SonnaOS", "https://github.com/eteriaal/SonnaOS \n", COL_TITLE, 0x20B2AA);
     fb_print(ESTELLA_VERSION " x86_64 EFI | limine protocol\n", COL_VERSION);
@@ -233,6 +230,7 @@ static void run_exception_test(void) {
 }
 
 void kmain(void) {
+    serial_init();
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision)) hcf();
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count == 0) hcf();
     if (!hhdm_request.response || !memmap_request.response || !module_request.response) hcf();

@@ -1,7 +1,8 @@
 #include <arch/x86_64/idt.h>
-#include <drivers/fbtext.h>
 #include <klib/string.h>
 #include <klib/memory.h>
+#include <drivers/fbtext.h>
+#include <drivers/serial.h>
 
 #define IDT_ENTRIES 256
 #define IDT_INTERRUPT 0x8E
@@ -17,64 +18,110 @@ extern void isr0(void), isr1(void), isr2(void), isr3(void), isr4(void), isr5(voi
 void exception_handler(uint64_t vector, uint64_t error_code, uint64_t rip, uint64_t cs,
                        uint64_t rflags, uint64_t rsp, uint64_t ss) {
     fb_print("KERNEL PANIC!\n", 0xFF5555);
+    serial_puts("KERNEL PANIC!\n");
 
     char buf[32] = {0};
 
     u64_to_dec(vector, buf);
     fb_print_value("Vector : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("Vector : ");
+    serial_puts(buf);
     fb_print("   ", 0xAAAAAA);
-    if (vector < 32) fb_print("(exception)", 0xAAAAAA);
+    serial_puts("   ");
+    if (vector < 32) {
+        fb_print("(exception)", 0xAAAAAA);
+        serial_puts("(exception)");
+    }
     fb_print("\n", 0);
+    serial_puts("\n");
 
     u64_to_hex(error_code, buf);
     fb_print_value("Error  : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("Error  : ");
+    serial_puts(buf);
     fb_print("\n", 0);
+    serial_puts("\n");
 
     u64_to_hex(rip, buf);
     fb_print_value("RIP    : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("RIP    : ");
+    serial_puts(buf);
     fb_print("\n", 0);
+    serial_puts("\n");
 
     u64_to_hex(cs, buf);
     fb_print_value("CS     : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("CS     : ");
+    serial_puts(buf);
     fb_print("  (ring ", 0xAAAAAA);
+    serial_puts("  (ring ");
     u64_to_dec(cs & 3, buf);
     fb_print(buf, 0xAAAAAA);
+    serial_puts(buf);
     fb_print(")\n", 0xAAAAAA);
+    serial_puts(")\n");
 
     u64_to_hex(rflags, buf);
     fb_print_value("RFLAGS : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("RFLAGS : ");
+    serial_puts(buf);
     fb_print("\n", 0);
+    serial_puts("\n");
 
     u64_to_hex(rsp, buf);
     fb_print_value("RSP    : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("RSP    : ");
+    serial_puts(buf);
     fb_print("\n", 0);
+    serial_puts("\n");
 
     u64_to_hex(ss, buf);
     fb_print_value("SS     : ", buf, 0xAAAAAA, 0xFFFFFF);
+    serial_puts("SS     : ");
+    serial_puts(buf);
     fb_print("\n", 0);
+    serial_puts("\n");
 
-    // if page fault
     if (vector == 14) {
         uint64_t cr2;
         asm volatile("mov %%cr2, %0" : "=r"(cr2));
         u64_to_hex(cr2, buf);
         fb_print_value("CR2    : ", buf, 0xAAAAAA, 0xFF7777);
+        serial_puts("CR2    : ");
+        serial_puts(buf);
         fb_print("  -> ", 0xAAAAAA);
+        serial_puts("  -> ");
 
-        if (error_code & 1)
+        if (error_code & 1) {
             fb_print("page-protection violation", 0xFF7777);
-        else
+            serial_puts("page-protection violation");
+        } else {
             fb_print("page not present", 0xFF7777);
-
-        if (error_code & 2) fb_print(", write attempt", 0xFF7777);
-        if (error_code & 4) fb_print(", user mode", 0xFF7777);
-        if (error_code & 8) fb_print(", reserved bit set", 0xFF7777);
-        if (error_code & 16) fb_print(", instruction fetch", 0xFF7777);
+            serial_puts("page not present");
+        }
+        if (error_code & 2) {
+            fb_print(", write attempt", 0xFF7777);
+            serial_puts(", write attempt");
+        }
+        if (error_code & 4) {
+            fb_print(", user mode", 0xFF7777);
+            serial_puts(", user mode");
+        }
+        if (error_code & 8) {
+            fb_print(", reserved bit set", 0xFF7777);
+            serial_puts(", reserved bit set");
+        }
+        if (error_code & 16) {
+            fb_print(", instruction fetch", 0xFF7777);
+            serial_puts(", instruction fetch");
+        }
 
         fb_print("\n", 0);
+        serial_puts("\n");
     }
 
     fb_print("\nSystem halted.\n", 0xFF5555);
+    serial_puts("System halted.\n\n");
 
     while (1) asm volatile("hlt");
 }

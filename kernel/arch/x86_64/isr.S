@@ -103,3 +103,25 @@ common:
     POP_REGS
     add $16, %rsp
     iretq
+
+.global lapic_timer_isr
+lapic_timer_isr:
+    PUSH_REGS
+
+    call lapic_timer_handler
+
+    POP_REGS
+    iretq
+
+.global lapic_error_isr
+lapic_error_isr:
+    push $0
+    push $0xFE
+    jmp common
+
+.global keyboard_isr
+keyboard_isr:
+    PUSH_REGS
+    call keyboard_handler
+    POP_REGS
+    iretq

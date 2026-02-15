@@ -4,10 +4,12 @@
 
 #include <arch/x86_64/acpi.h>
 
+extern uint64_t hhdm_offset;
+
 struct xsdt* acpi_get_xsdt(void* rsdp_ptr) {
     struct rsdp2* rsdp = (struct rsdp2*)rsdp_ptr;
 
-    if (rsdp->revision < 2) return NULL; // shouldn't get here
+    if (rsdp->revision < 2) return NULL;
 
     return (struct xsdt*)((uintptr_t)rsdp->xsdt_address + hhdm_offset);
 }

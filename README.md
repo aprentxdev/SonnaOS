@@ -5,19 +5,20 @@ Writing an operating system because I want to occupy my time...
 **Estella** - x86_64 EFI kernel using the Limine bootloader protocol.
 
 ### Current status
-- Boots on x86_64 UEFI (Limine).
-- GDT/IDT/TSS up.
-- ACPI: RSDP, XSDT, and MADT recognized
-- PMM + VMM implemented.
-- Huge pages supported.
-- Runtime self-tests pass.
+- Boots on x86_64 UEFI via Limine
+- GDT, TSS, IDT + ISRs ready
+- ACPI: RSDP/XSDT/MADT parsed, LAPIC + IOAPIC initialized
+- PMM + VMM up and passing self-tests
+- PS/2 keyboard driver working
+- Framebuffer console (Spleen 12×24 .psfu)
+
 ### Output
-- Serial (debugging)
-- Framebuffer console (with Spleen PSF2 font)
+- Serial debug
+- Framebuffer text mode
 
 ### Next:
-- APIC, keyboard
-- maybe timer
+- LAPIC Timer (calibration)
+- Maybe userspace / maybe heap, etc.
 
 ---
 ![screenshot](sonnaos.png)

@@ -9,14 +9,16 @@
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/acpi.h>
+#include <arch/x86_64/apic.h>
 #include <drivers/font.h>
 #include <drivers/fbtext.h>
 #include <drivers/serial.h>
+#include <drivers/keyboard.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <colors.h>
 
-#define ESTELLA_VERSION "v0.Estella.5.0"
+#define ESTELLA_VERSION "v0.Estella.6.0"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -58,7 +60,7 @@ volatile struct limine_hhdm_request hhdm_request = {
 };
 
 __attribute__((used, section(".limine_requests")))
-static volatile struct limine_rsdp_request rsdp_request = {
+volatile struct limine_rsdp_request rsdp_request = {
     .id = LIMINE_RSDP_REQUEST_ID,
     .revision = 0
 };
@@ -193,205 +195,60 @@ static void print_memory_info(void) {
 }
 
 void run_pmm_tests(void) {
-    fb_print("Running PMM tests...\n", COL_INFO);
-    char buf[32];
+    void *p1 = pmm_alloc();
+    if (!p1) goto fail;
+    pmm_free(p1);
 
-    void *phys1 = pmm_alloc();
-    if (phys1) {
-        fb_print("PMM: alloc OK\n", COL_SUCCESS_INIT);
-        serial_puts("PMM: alloc OK\n");
-        pmm_free(phys1);
-        fb_print("PMM: free OK\n", COL_SUCCESS_INIT);
-        serial_puts("PMM: free OK\n");
-    } else {
-        fb_print("PMM: alloc FAILED (OOM?)\n", COL_FAIL);
-        serial_puts("PMM: alloc FAILED (OOM?)\n");
-        return;
-    }
+    void *p2 = pmm_alloc_frames(4);
+    if (!p2) goto fail;
+    pmm_free_frames(p2, 4);
 
-    size_t test_count = 4;
-    void *phys_contig = pmm_alloc_frames(test_count);
-    if (phys_contig) {
-        fb_print("PMM: contiguous OK\n", COL_SUCCESS_INIT);
-        serial_puts("PMM contiguous OK\n");
-        pmm_free_frames(phys_contig, test_count);
-    } else {
-        fb_print("PMM: contiguous FAILED (fragmentation?)\n", COL_FAIL);
-        serial_puts("PMM: contiguous FAILED (fragmentation?)\n");
-        return;
-    }
+    void *p3 = pmm_alloc_frames_aligned(4, PAGE_SIZE * 4);
+    if (!p3 || ((uintptr_t)p3 % (PAGE_SIZE * 4) != 0)) goto fail;
+    pmm_free_frames(p3, 4);
 
-    size_t align_test = PAGE_SIZE * 4;
-    void *phys_aligned = pmm_alloc_frames_aligned(test_count, align_test);
-    if (phys_aligned && ((uint64_t)phys_aligned % align_test == 0)) {
-        fb_print("PMM: aligned OK\n", COL_SUCCESS_INIT);
-        serial_puts("PMM aligned OK\n");
-        pmm_free_frames(phys_aligned, test_count);
-    } else {
-        fb_print("PMM: aligned FAILED (misaligned or OOM)\n", COL_FAIL);
-        serial_puts("PMM: aligned FAILED (misaligned or OOM)\n");
-        if (phys_aligned) pmm_free_frames(phys_aligned, test_count);
-        return;
-    }
+    void *p4 = pmm_alloc_zeroed();
+    if (!p4) goto fail;
+    if (*(uint64_t*)phys_to_virt((uint64_t)p4) != 0) goto fail;
+    pmm_free(p4);
 
-    void *phys_zero = pmm_alloc_zeroed();
-    if (phys_zero) {
-        uint64_t *ptr = (uint64_t *)phys_to_virt((uint64_t)phys_zero);
-        if (*ptr == 0) {
-            fb_print("PMM: zeroed OK\n", COL_SUCCESS_INIT);
-            serial_puts("PMM zeroed OK\n");
-        } else {
-            fb_print("PMM: zeroed FAILED (not zeroed)\n", COL_FAIL);
-            serial_puts("PMM zeroed: first word = "); u64_to_hex(*ptr, buf); serial_puts(buf); serial_puts("\n");
-        }
-        pmm_free(phys_zero);
-    } else {
-        fb_print("PMM: zeroed FAILED (OOM)\n", COL_FAIL);
-        serial_puts("PMM: zeroed FAILED (OOM)\n");
-        return;
-    }
+    fb_print("PMM tests: OK\n", COL_SUCCESS_INIT);
+    serial_puts("PMM tests OK\n");
+    return;
 
-    fb_print("PMM tests: PASSED\n\n", COL_SUCCESS_INIT);
+fail:
+    fb_print("PMM tests: FAILED\n", COL_FAIL);
+    serial_puts("PMM tests FAILED\n");
 }
 
 void run_vmm_tests(void) {
-    fb_print("Running VMM tests...\n", COL_INFO);
-    serial_puts("Running VMM tests...\n");
+    uint64_t vaddr = 0xFFFF900000000000ULL;
+    void *phys = pmm_alloc();
+    if (!phys) goto fail;
 
-    char buf[32];
+    if (!vmm_map(vaddr, (uint64_t)phys, PTE_KERNEL_RW)) goto fail_free;
 
-    uint64_t virt_small = 0xFFFF900000000000ULL;
-    void *phys_small = pmm_alloc();
-    if (!phys_small || !vmm_map(virt_small, (uint64_t)phys_small, PTE_KERNEL_RW)) {
-        fb_print("VMM: basic map FAILED (OOM or invalid addr)\n", COL_FAIL);
-        serial_puts("VMM basic map failed (OOM or invalid addr)\n");
-        if (phys_small) pmm_free(phys_small);
-        return;
-    }
-    fb_print("VMM: basic map OK\n", COL_SUCCESS_INIT);
-    serial_puts("VMM: basic map OK\n");
+    uint64_t *ptr = (uint64_t *)vaddr;
+    *ptr = 0xDEADBEEFCAFEBABELL;
+    if (*ptr != 0xDEADBEEFCAFEBABELL) goto fail_unmap;
 
-    uint64_t *ptr_small = (uint64_t *)virt_small;
-    *ptr_small = 0xDEADBEEF12345678ULL;
-    if (*ptr_small == 0xDEADBEEF12345678ULL) {
-        fb_print("VMM: basic R/W OK\n", COL_SUCCESS_INIT);
-        serial_puts("VMM: basic R/W OK\n");
-    } else {
-        fb_print("VMM: basic R/W FAILED (mismatch)\n", COL_FAIL);
-        serial_puts("VMM: basic R/W FAILED (mismatch)\n");
-    }
+    vmm_unmap(vaddr);
+    pmm_free(phys);
 
-    uint64_t read_phys = vmm_get_physical(virt_small);
-    if (read_phys == (uint64_t)phys_small) {
-        fb_print("VMM: get_physical OK\n", COL_SUCCESS_INIT);
-        serial_puts("VMM: get_physical OK\n");
-    } else {
-        fb_print("VMM: get_physical FAILED (wrong phys)\n", COL_FAIL);
-        serial_puts("VMM get_phys: expected "); u64_to_hex((uint64_t)phys_small, buf); serial_puts(buf);
-        serial_puts(", got "); u64_to_hex(read_phys, buf); serial_puts(buf); serial_puts("\n");
-    }
+    fb_print("VMM tests: OK\n", COL_SUCCESS_INIT);
+    serial_puts("VMM tests OK\n");
+    return;
 
-    vmm_unmap(virt_small);
-    pmm_free(phys_small);
-    fb_print("VMM: basic unmap OK\n", COL_SUCCESS_INIT);
-    serial_puts("VMM: basic unmap OK\n");
-
-    size_t huge_frames = HUGE_2MB / PAGE_SIZE;
-    void *phys_huge = pmm_alloc_frames_aligned_zeroed(huge_frames, HUGE_2MB);
-    if (!phys_huge) {
-        fb_print("VMM: huge alloc FAILED (no aligned 2MiB)\n", COL_FAIL);
-        serial_puts("VMM: huge alloc FAILED (no aligned 2MiB)\n");
-        return;
-    }
-    uint64_t phys_huge_addr = (uint64_t)phys_huge;
-    if (phys_huge_addr % HUGE_2MB != 0) {
-        fb_print("VMM: huge align FAILED (not 2MiB aligned)\n", COL_FAIL);
-        serial_puts("VMM: huge align FAILED (not 2MiB aligned)\n");
-        pmm_free_frames(phys_huge, huge_frames);
-        return;
-    }
-    fb_print("VMM: huge alloc OK\n", COL_SUCCESS_INIT);
-    serial_puts("VMM: huge alloc OK\n");
-
-    uint64_t virt_huge = 0xFFFFA00000000000ULL;
-    if (vmm_map_huge_2mb(virt_huge, phys_huge_addr, PTE_KERNEL_RW)) {
-        fb_print("VMM: huge map OK\n", COL_SUCCESS_INIT);
-        serial_puts("VMM: huge map OK\n");
-        uint64_t *ptr = (uint64_t *)virt_huge;
-        *ptr = 0xCAFEBABE87654321ULL;
-        if (*ptr == 0xCAFEBABE87654321ULL) {
-            fb_print("VMM: huge R/W OK\n", COL_SUCCESS_INIT);
-            serial_puts("VMM: huge R/W OK\n");
-        } else {
-            fb_print("VMM: huge R/W FAILED (mismatch)\n", COL_FAIL);
-            serial_puts("VMM: huge R/W FAILED (mismatch)\n");
-        }
-
-        uint64_t read_phys = vmm_get_physical(virt_huge);
-        if ((read_phys & ~(HUGE_2MB-1)) == phys_huge_addr) {
-            fb_print("VMM: huge get_physical OK\n", COL_SUCCESS_INIT);
-            serial_puts("VMM: huge get_physical OK\n");
-        } else {
-            fb_print("VMM: huge get_physical FAILED (wrong base)\n", COL_FAIL);
-            serial_puts("VMM: huge get_physical FAILED (wrong base)\n");
-        }
-
-        vmm_unmap_huge_2mb(virt_huge);
-        pmm_free_frames(phys_huge, huge_frames);
-        fb_print("VMM: huge unmap OK\n", COL_SUCCESS_INIT);
-        serial_puts("VMM: huge unmap OK\n");
-    } else {
-        fb_print("VMM: huge map FAILED\n", COL_FAIL);
-        serial_puts("VMM huge map FAILED\n");
-        pmm_free_frames(phys_huge, huge_frames);
-        return;
-    }
-
-    void *phys_double = pmm_alloc();
-    if (phys_double && vmm_map(virt_small, (uint64_t)phys_double, PTE_KERNEL_RW)) {
-        if (!vmm_map(virt_small, (uint64_t)phys_double, PTE_KERNEL_RW)) {
-            fb_print("VMM: double map rejected OK\n", COL_SUCCESS_INIT);
-            serial_puts("VMM double map rejected OK\n");
-        } else {
-            fb_print("VMM: double map ALLOWED (FAIL!)\n", COL_FAIL);
-            serial_puts("VMM: double map ALLOWED (FAIL!)\n");
-        }
-        vmm_unmap(virt_small);
-        pmm_free(phys_double);
-    } else {
-        fb_print("VMM: double map setup FAILED\n", COL_FAIL);
-        serial_puts("VMM double map setup FAILED\n");
-        if (phys_double) pmm_free(phys_double);
-        return;
-    }
-
-    fb_print("VMM tests: PASSED\n\n", COL_SUCCESS_INIT);
-    serial_puts("VMM tests: PASSED\n\n");
+fail_unmap:
+    vmm_unmap(vaddr);
+fail_free:
+    pmm_free(phys);
+fail:
+    fb_print("VMM tests: FAILED\n", COL_FAIL);
+    serial_puts("VMM tests FAILED\n");
 }
 
-__attribute__((unused)) 
-static void run_exception_test(void) {
-    // fb_print("Testing #UD (invalid opcode (ud2)) - 6 vector...\n", COL_TEST_HDR);
-    // serial_puts("Testing #UD (invalid opcode (ud2)) - 6 vector...\n");
-    // asm volatile("ud2");
-
-    // fb_print("Testing #DE (divide by zero) - 0 vector...\n", COL_TEST_HDR);
-    // serial_puts("Testing #DE (divide by zero) - 0 vector...\n");
-    // asm volatile("mov $0, %%eax; idiv %%eax" : : : "eax");
-
-    // fb_print("Testing #GP (invalid selector) - 13 vector...\n", 0xFFFF00);
-    // serial_puts("Testing #GP (invalid selector) - 13 vector...\n");
-    // asm volatile("mov $0x28, %%ax; mov %%ax, %%fs; mov %%fs:0, %%rax" : : : "rax", "ax");
-
-    // fb_print("Testing #PF (dereference null) - 14 vector...\n", 0xFFFF00);
-    // serial_puts("Testing #PF (dereference null) - 14 vector...\n");
-    // volatile uint64_t *null_ptr = (uint64_t *)0x0;
-    // uint64_t dummy = *null_ptr;
-
-    // fb_print("Testing #BP (int3) - 3 vector...\n", 0xFFFF00);
-    // serial_puts("Testing #BP (int3) - 3 vector...\n");
-    // asm volatile("int3");
-
+static void trigger_panic(void) {
     fb_print("Testing #TS (invalid TSS) - 13 vector...\n", 0xFFFF00);
     serial_puts("Testing #TS (invalid TSS) - 13 vector...\n");
     asm volatile(
@@ -403,56 +260,25 @@ static void run_exception_test(void) {
     );
 }
 
-static void test_acpi(struct limine_rsdp_response *rsdp_resp) {
-    char buf[32];
-    void *rsdp_ptr = rsdp_resp->address;
-
-    struct xsdt* xsdt = acpi_get_xsdt(rsdp_ptr);
-    if (!xsdt) {
-        serial_puts("XSDT not found!\n");
-        return;
-    }
-
-    serial_puts("XSDT found: ");
-    u64_to_hex((uint64_t)xsdt, buf);
-    serial_puts(buf);
-    serial_puts(", length = ");
-    u64_to_dec(xsdt->header.length, buf);
-    serial_puts(buf);
-    serial_puts("\n");
-
-    struct madt* madt = acpi_get_madt(rsdp_ptr);
-    if (!madt) {
-        serial_puts("MADT not found!\n");
-        return;
-    }
-
-    serial_puts("MADT found: ");
-    u64_to_hex((uint64_t)madt, buf);
-    serial_puts(buf);
-    serial_puts("\nLAPIC address = ");
-    u64_to_hex((uint64_t)madt->lapic_address, buf);
-    serial_puts(buf);
-    serial_puts("\nflags = ");
-    u64_to_hex((uint64_t)madt->flags, buf);
-    serial_puts(buf);
-    serial_puts("\n");
-}
-
 void EstellaEntry(void) {
+    // asm volatile("sti");
+    // https://codeberg.org/Limine/limine-protocol/src/branch/trunk/PROTOCOL.md#x86-64-1
+    // IF flag is cleared on entry
+
     serial_init();
     serial_puts("EstellaEntry\n");
+
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision)) hcf();
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count == 0) hcf();
     if (!hhdm_request.response || !memmap_request.response || !module_request.response || !rsdp_request.response) hcf();
 
-    
-    struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
-
+    // load font, init fbtext
     struct limine_file *font_module;
     struct psf2_header *psf2 = load_psf2_font(module_request, &font_module);
-    if (!psf2) {serial_puts("!psf2\n");hcf();}
-
+    if (!psf2) {
+        serial_puts("!psf2\n");
+        hcf();
+    }
     font_t font = {
         .is_psf2 = true,
         .hdr.psf2 = psf2,
@@ -462,25 +288,48 @@ void EstellaEntry(void) {
         .line_height = psf2->height + 1,
         .glyph_count = psf2->length
     };
+    struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
     fbtext_init(fb, &font);
 
+    // init everything
     gdt_init(); fb_print("GDT + TSS initialized\n", COL_SUCCESS_INIT); serial_puts("GDT + TSS initialized\n");
     idt_init(); fb_print("IDT + ISR initialized\n", COL_SUCCESS_INIT); serial_puts("IDT + ISR initialized\n");
     pmm_init(); fb_print("PMM initialized\n", COL_SUCCESS_INIT); serial_puts("PMM initialized\n");
     vmm_init(); fb_print("VMM initialized\n", COL_SUCCESS_INIT); serial_puts("VMM initialized\n");
-
-    struct limine_rsdp_response *rsdp_resp = rsdp_request.response;
-    test_acpi(rsdp_resp);
-    
-    fb_print("\n", 0);
-
-    print_system_info(fb);
-    print_memory_info();
+    apic_init(); fb_print("LAPIC + IOAPIC initialized\n", COL_SUCCESS_INIT); serial_puts("LAPIC + IOAPIC initialized\n");
+    keyboard_init(); fb_print("Keyboard initialized\n", COL_SUCCESS_INIT); serial_puts("Keyboard initialized\n");
 
     run_pmm_tests();
     run_vmm_tests();
 
-    // run_exception_test();
+    fb_print("\n", 0);
+    print_system_info(fb);
+    print_memory_info();
 
+    // Enabling interrupts
+    asm volatile("sti");
+
+    fb_print("Press any key to trigger kernel panic from #TS\n", COL_INFO);
+    serial_puts("Press any key to trigger kernel panic from #TS\n");
+    while (1) {
+        if (keyboard_has_data()) {
+            char ch = keyboard_get_char();
+            if (ch != 0) {
+                fb_print("Pressed: '", COL_INFO);
+                char tmp[2] = {ch, '\0'};
+                fb_print(tmp, COL_USED);
+                fb_print("'\n", COL_INFO);
+
+                serial_puts("Pressed: '");
+                serial_putc(ch);
+                serial_puts("'\n");
+
+                fb_print("\n", 0);
+                serial_puts("\n");
+
+                trigger_panic();
+            }
+        }
+    }
     hcf();
 }

@@ -11,7 +11,7 @@ static size_t g_cursor_y = 15;
 
 void fbtext_init(struct limine_framebuffer *fb, font_t *font)
 {
-    g_fb   = fb;
+    g_fb = fb;
     g_font = font;
 
     if (!font || !font->glyphs || font->width == 0 || font->height == 0) {

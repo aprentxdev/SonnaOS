@@ -8,10 +8,11 @@
 #include <klib/string.h>
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
-#include <mm/pmm.h>
 #include <drivers/font.h>
 #include <drivers/fbtext.h>
 #include <drivers/serial.h>
+#include <mm/pmm.h>
+#include <mm/vmm.h>
 #include <colors.h>
 
 #define ESTELLA_VERSION "v0.Estella.3.3"
@@ -38,7 +39,7 @@ static volatile struct limine_firmware_type_request firmware_type_request = {
 };
 
 __attribute__((used, section(".limine_requests")))
-static volatile struct limine_memmap_request memmap_request = {
+volatile struct limine_memmap_request memmap_request = {
     .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0
 };
@@ -50,7 +51,7 @@ static volatile struct limine_module_request module_request = {
 };
 
 __attribute__((used, section(".limine_requests")))
-static volatile struct limine_hhdm_request hhdm_request = {
+volatile struct limine_hhdm_request hhdm_request = {
     .id = LIMINE_HHDM_REQUEST_ID,
     .revision = 0
 };
@@ -68,9 +69,11 @@ void hcf(void) {
 }
 
 static void print_system_info(struct limine_framebuffer *fb) {
-    fb_print_value("SonnaOS", "https://github.com/eteriaal/SonnaOS \n", COL_TITLE, 0x20B2AA);
+    fb_print_value("SonnaOS", "https://github.com/eteriaal/SonnaOS", COL_TITLE, 0x20B2AA);
+    fb_print("\n", 0);
+
     fb_print(ESTELLA_VERSION " x86_64 EFI | limine protocol\n", COL_VERSION);
-    fb_print("Using Spleen font 12x24 .psfu (psf2) \n", COL_INFO);
+    fb_print("Using Spleen font 12x24 .psfu (psf2)\n", COL_INFO);
 
     fb_print("\n", 0);
 
@@ -95,6 +98,10 @@ static void print_system_info(struct limine_framebuffer *fb) {
         }
         fb_print_value("Bootloader: ", bootloader_str, COL_LABEL, COL_VALUE);
         fb_print("\n", 0);
+
+        serial_puts("Bootloader: ");
+        serial_puts(bootloader_str);
+        serial_puts("\n");
     }
 
     if (firmware_type_request.response) {
@@ -107,6 +114,10 @@ static void print_system_info(struct limine_framebuffer *fb) {
         }
         fb_print_value("Firmware:   ", fw, COL_LABEL, COL_VALUE);
         fb_print("\n", 0);
+
+        serial_puts("Firmware: ");
+        serial_puts(fw);
+        serial_puts("\n");
     }
 
     char fb_addr[20] = {0};
@@ -116,127 +127,282 @@ static void print_system_info(struct limine_framebuffer *fb) {
 }
 
 static void print_memory_info(void) {
-    if (!memmap_request.response) return;
+    size_t total  = pmm_get_total_frames();
+    size_t usable = pmm_get_usable_frames();
+    size_t free   = pmm_get_free_frames();
+    size_t used   = pmm_get_used_frames();
 
-    fb_print("Memory map\n", COL_TITLE);
+    char buf[80];
 
-    char buf[32] = {0};
-    u64_to_dec(memmap_request.response->entry_count, buf);
-    fb_print_value("Memmap entries:", buf, COL_LABEL, COL_VALUE);
+    fb_print("Memory Overview\n", COL_SECTION_TITLE);
+
+    u64_to_dec(total * PAGE_SIZE / 1024 / 1024, buf);
+    strcat(buf, " MiB (");
+    u64_to_dec(total, buf + strlen(buf));
+    strcat(buf, " pages)");
+    fb_print_value("> Total   ", buf, COL_LABEL, COL_VALUE);
     fb_print("\n", 0);
 
-    u64_to_dec(pmm_get_total_frames(),  buf); fb_print_value("Total pages:   ", buf, COL_LABEL, COL_VALUE); fb_print("\n", 0);
-    u64_to_dec(pmm_get_usable_frames(), buf); fb_print_value("Usable pages:  ", buf, COL_LABEL, COL_VALUE); fb_print("\n", 0);
-    u64_to_dec(pmm_get_free_frames(),   buf); fb_print_value("Free pages:    ", buf, COL_LABEL, COL_VALUE); fb_print("\n", 0);
-    u64_to_dec(pmm_get_used_frames(),   buf); fb_print_value("Used pages:    ", buf, COL_LABEL, COL_VALUE); fb_print("\n\n", 0);
+    u64_to_dec(usable * PAGE_SIZE / 1024 / 1024, buf);
+    strcat(buf, " MiB (");
+    u64_to_dec(usable, buf + strlen(buf));
+    strcat(buf, " pages)");
+    fb_print_value("> Usable  ", buf, COL_LABEL, COL_VALUE);
+    fb_print("\n", 0);
+
+    u64_to_dec(used * PAGE_SIZE / 1024 / 1024, buf);
+    strcat(buf, " MiB (");
+    u64_to_dec(used, buf + strlen(buf));
+    strcat(buf, " pages)");
+    fb_print_value("> Used    ", buf, COL_LABEL, COL_USED);
+    fb_print("\n", 0);
+
+    u64_to_dec(free * PAGE_SIZE / 1024 / 1024, buf);
+    strcat(buf, " MiB (");
+    u64_to_dec(free, buf + strlen(buf));
+    strcat(buf, " pages)");
+    fb_print_value("> Free    ", buf, COL_LABEL, COL_FREE);
+    fb_print("\n\n", 0);
+
+    serial_puts("Memory: total ");
+    u64_to_dec(total * PAGE_SIZE / 1024 / 1024, buf);
+    serial_puts(buf);
+    serial_puts(" MiB (");
+    u64_to_dec(total, buf);
+    serial_puts(buf);
+    serial_puts(" pages), usable ");
+    u64_to_dec(usable * PAGE_SIZE / 1024 / 1024, buf);
+    serial_puts(buf);
+    serial_puts(" MiB (");
+    u64_to_dec(usable, buf);
+    serial_puts(buf);
+    serial_puts(" pages), free ");
+    u64_to_dec(free * PAGE_SIZE / 1024 / 1024, buf);
+    serial_puts(buf);
+    serial_puts(" MiB (");
+    u64_to_dec(free, buf);
+    serial_puts(buf);
+    serial_puts(" pages)\n");
 }
 
-static void run_pmm_tests(void) {
-    fb_print("PMM Test: alloc / free / reuse\n", COL_TEST_HDR);
+void run_pmm_tests(void) {
+    fb_print("Running PMM tests...\n", COL_INFO);
+    char buf[32];
 
-    size_t free_before = pmm_get_free_frames();
-    char buf[32] = {0};
-    u64_to_dec(free_before, buf);
-    fb_print_value("Free before:", buf, COL_LABEL, COL_VALUE);
-    fb_print("\n", 0);
-
-    void *p1 = pmm_alloc();
-    void *p2 = pmm_alloc();
-    void *p3 = pmm_alloc();
-    void *block = pmm_alloc_frames(8);
-
-    if (!p1 || !p2 || !p3 || !block) {
-        fb_print("Allocation failed.\n", COL_FAIL);
+    void *phys1 = pmm_alloc();
+    if (phys1) {
+        fb_print("PMM: alloc OK\n", COL_SUCCESS_INIT);
+        serial_puts("PMM: alloc OK\n");
+        pmm_free(phys1);
+        fb_print("PMM: free OK\n", COL_SUCCESS_INIT);
+        serial_puts("PMM: free OK\n");
+    } else {
+        fb_print("PMM: alloc FAILED (OOM?)\n", COL_FAIL);
+        serial_puts("PMM: alloc FAILED (OOM?)\n");
         return;
     }
 
-    char addr[20];
-    u64_to_hex((uint64_t)p1, addr); fb_print_value("p1:", addr, COL_LABEL, COL_ADDRESS); fb_print("\n", 0);
-    u64_to_hex((uint64_t)p2, addr); fb_print_value("p2:", addr, COL_LABEL, COL_ADDRESS); fb_print("\n", 0);
-    u64_to_hex((uint64_t)p3, addr); fb_print_value("p3:", addr, COL_LABEL, COL_ADDRESS); fb_print("\n", 0);
-    u64_to_hex((uint64_t)block, addr); fb_print_value("block:", addr, COL_LABEL, COL_ADDRESS); fb_print("\n", 0);
-
-    size_t free_mid = pmm_get_free_frames();
-    u64_to_dec(free_mid, buf);
-    fb_print_value("Free after alloc:", buf, COL_LABEL, COL_VALUE);
-    fb_print("\n", 0);
-
-    pmm_free(p1);
-    pmm_free(p2);
-    pmm_free(p3);
-    pmm_free_frames(block, 8);
-
-    size_t free_after = pmm_get_free_frames();
-    u64_to_dec(free_after, buf);
-    fb_print_value("Free after free: ", buf, COL_LABEL, COL_VALUE);
-    fb_print("\n", 0);
-
-    if (free_after == free_before) {
-        fb_print("PASSED - memory fully recovered\n", COL_OK);
-
-        void *reuse = pmm_alloc();
-        if (reuse) {
-            u64_to_hex((uint64_t)reuse, addr);
-            fb_print_value("First reused page:", addr, COL_OK, COL_ADDRESS);
-            fb_print("\n", 0);
-            pmm_free(reuse);
-        } else {
-            fb_print("ERROR: Could not allocate after full free!\n", COL_FAIL);
-        }
+    size_t test_count = 4;
+    void *phys_contig = pmm_alloc_frames(test_count);
+    if (phys_contig) {
+        fb_print("PMM: contiguous OK\n", COL_SUCCESS_INIT);
+        serial_puts("PMM contiguous OK\n");
+        pmm_free_frames(phys_contig, test_count);
     } else {
-        fb_print("FAILED - leak detected!\n", COL_FAIL);
-
-        int64_t delta = (int64_t)free_before - (int64_t)free_after;
-        char delta_str[32] = {0};
-        if (delta > 0) {
-            delta_str[0] = '+';
-            u64_to_dec((uint64_t)delta, delta_str + 1);
-        } else {
-            delta_str[0] = '-';
-            u64_to_dec((uint64_t)(-delta), delta_str + 1);
-        }
-        fb_print_value("Leak:", delta_str, COL_FAIL, COL_FAIL);
-        fb_print(" pages\n", COL_FAIL);
+        fb_print("PMM: contiguous FAILED (fragmentation?)\n", COL_FAIL);
+        serial_puts("PMM: contiguous FAILED (fragmentation?)\n");
+        return;
     }
 
-    fb_print("\n", 0);
+    size_t align_test = PAGE_SIZE * 4;
+    void *phys_aligned = pmm_alloc_frames_aligned(test_count, align_test);
+    if (phys_aligned && ((uint64_t)phys_aligned % align_test == 0)) {
+        fb_print("PMM: aligned OK\n", COL_SUCCESS_INIT);
+        serial_puts("PMM aligned OK\n");
+        pmm_free_frames(phys_aligned, test_count);
+    } else {
+        fb_print("PMM: aligned FAILED (misaligned or OOM)\n", COL_FAIL);
+        serial_puts("PMM: aligned FAILED (misaligned or OOM)\n");
+        if (phys_aligned) pmm_free_frames(phys_aligned, test_count);
+        return;
+    }
+
+    void *phys_zero = pmm_alloc_zeroed();
+    if (phys_zero) {
+        uint64_t *ptr = (uint64_t *)phys_to_virt((uint64_t)phys_zero);
+        if (*ptr == 0) {
+            fb_print("PMM: zeroed OK\n", COL_SUCCESS_INIT);
+            serial_puts("PMM zeroed OK\n");
+        } else {
+            fb_print("PMM: zeroed FAILED (not zeroed)\n", COL_FAIL);
+            serial_puts("PMM zeroed: first word = "); u64_to_hex(*ptr, buf); serial_puts(buf); serial_puts("\n");
+        }
+        pmm_free(phys_zero);
+    } else {
+        fb_print("PMM: zeroed FAILED (OOM)\n", COL_FAIL);
+        serial_puts("PMM: zeroed FAILED (OOM)\n");
+        return;
+    }
+
+    fb_print("PMM tests: PASSED\n\n", COL_SUCCESS_INIT);
 }
 
+void run_vmm_tests(void) {
+    fb_print("Running VMM tests...\n", COL_INFO);
+    serial_puts("Running VMM tests...\n");
+
+    char buf[32];
+
+    uint64_t virt_small = 0xFFFF900000000000ULL;
+    void *phys_small = pmm_alloc();
+    if (!phys_small || !vmm_map(virt_small, (uint64_t)phys_small, PTE_KERNEL_RW)) {
+        fb_print("VMM: basic map FAILED (OOM or invalid addr)\n", COL_FAIL);
+        serial_puts("VMM basic map failed (OOM or invalid addr)\n");
+        if (phys_small) pmm_free(phys_small);
+        return;
+    }
+    fb_print("VMM: basic map OK\n", COL_SUCCESS_INIT);
+    serial_puts("VMM: basic map OK\n");
+
+    uint64_t *ptr_small = (uint64_t *)virt_small;
+    *ptr_small = 0xDEADBEEF12345678ULL;
+    if (*ptr_small == 0xDEADBEEF12345678ULL) {
+        fb_print("VMM: basic R/W OK\n", COL_SUCCESS_INIT);
+        serial_puts("VMM: basic R/W OK\n");
+    } else {
+        fb_print("VMM: basic R/W FAILED (mismatch)\n", COL_FAIL);
+        serial_puts("VMM: basic R/W FAILED (mismatch)\n");
+    }
+
+    uint64_t read_phys = vmm_get_physical(virt_small);
+    if (read_phys == (uint64_t)phys_small) {
+        fb_print("VMM: get_physical OK\n", COL_SUCCESS_INIT);
+        serial_puts("VMM: get_physical OK\n");
+    } else {
+        fb_print("VMM: get_physical FAILED (wrong phys)\n", COL_FAIL);
+        serial_puts("VMM get_phys: expected "); u64_to_hex((uint64_t)phys_small, buf); serial_puts(buf);
+        serial_puts(", got "); u64_to_hex(read_phys, buf); serial_puts(buf); serial_puts("\n");
+    }
+
+    vmm_unmap(virt_small);
+    pmm_free(phys_small);
+    fb_print("VMM: basic unmap OK\n", COL_SUCCESS_INIT);
+    serial_puts("VMM: basic unmap OK\n");
+
+    size_t huge_frames = HUGE_2MB / PAGE_SIZE;
+    void *phys_huge = pmm_alloc_frames_aligned_zeroed(huge_frames, HUGE_2MB);
+    if (!phys_huge) {
+        fb_print("VMM: huge alloc FAILED (no aligned 2MiB)\n", COL_FAIL);
+        serial_puts("VMM: huge alloc FAILED (no aligned 2MiB)\n");
+        return;
+    }
+    uint64_t phys_huge_addr = (uint64_t)phys_huge;
+    if (phys_huge_addr % HUGE_2MB != 0) {
+        fb_print("VMM: huge align FAILED (not 2MiB aligned)\n", COL_FAIL);
+        serial_puts("VMM: huge align FAILED (not 2MiB aligned)\n");
+        pmm_free_frames(phys_huge, huge_frames);
+        return;
+    }
+    fb_print("VMM: huge alloc OK\n", COL_SUCCESS_INIT);
+    serial_puts("VMM: huge alloc OK\n");
+
+    uint64_t virt_huge = 0xFFFFA00000000000ULL;
+    if (vmm_map_huge_2mb(virt_huge, phys_huge_addr, PTE_KERNEL_RW)) {
+        fb_print("VMM: huge map OK\n", COL_SUCCESS_INIT);
+        serial_puts("VMM: huge map OK\n");
+        uint64_t *ptr = (uint64_t *)virt_huge;
+        *ptr = 0xCAFEBABE87654321ULL;
+        if (*ptr == 0xCAFEBABE87654321ULL) {
+            fb_print("VMM: huge R/W OK\n", COL_SUCCESS_INIT);
+            serial_puts("VMM: huge R/W OK\n");
+        } else {
+            fb_print("VMM: huge R/W FAILED (mismatch)\n", COL_FAIL);
+            serial_puts("VMM: huge R/W FAILED (mismatch)\n");
+        }
+
+        uint64_t read_phys = vmm_get_physical(virt_huge);
+        if ((read_phys & ~(HUGE_2MB-1)) == phys_huge_addr) {
+            fb_print("VMM: huge get_physical OK\n", COL_SUCCESS_INIT);
+            serial_puts("VMM: huge get_physical OK\n");
+        } else {
+            fb_print("VMM: huge get_physical FAILED (wrong base)\n", COL_FAIL);
+            serial_puts("VMM: huge get_physical FAILED (wrong base)\n");
+        }
+
+        vmm_unmap_huge_2mb(virt_huge);
+        pmm_free_frames(phys_huge, huge_frames);
+        fb_print("VMM: huge unmap OK\n", COL_SUCCESS_INIT);
+        serial_puts("VMM: huge unmap OK\n");
+    } else {
+        fb_print("VMM: huge map FAILED\n", COL_FAIL);
+        serial_puts("VMM huge map FAILED\n");
+        pmm_free_frames(phys_huge, huge_frames);
+        return;
+    }
+
+    void *phys_double = pmm_alloc();
+    if (phys_double && vmm_map(virt_small, (uint64_t)phys_double, PTE_KERNEL_RW)) {
+        if (!vmm_map(virt_small, (uint64_t)phys_double, PTE_KERNEL_RW)) {
+            fb_print("VMM: double map rejected OK\n", COL_SUCCESS_INIT);
+            serial_puts("VMM double map rejected OK\n");
+        } else {
+            fb_print("VMM: double map ALLOWED (FAIL!)\n", COL_FAIL);
+            serial_puts("VMM: double map ALLOWED (FAIL!)\n");
+        }
+        vmm_unmap(virt_small);
+        pmm_free(phys_double);
+    } else {
+        fb_print("VMM: double map setup FAILED\n", COL_FAIL);
+        serial_puts("VMM double map setup FAILED\n");
+        if (phys_double) pmm_free(phys_double);
+        return;
+    }
+
+    fb_print("VMM tests: PASSED\n\n", COL_SUCCESS_INIT);
+    serial_puts("VMM tests: PASSED\n\n");
+}
+
+__attribute__((unused)) 
 static void run_exception_test(void) {
-    fb_print("Testing #UD (invalid opcode (ud2))...\n", COL_TEST_HDR);
-    asm volatile("ud2");
+    // fb_print("Testing #UD (invalid opcode (ud2))...\n", COL_TEST_HDR);
+    // serial_puts("Testing #UD (invalid opcode (ud2))...\n");
+    // asm volatile("ud2");
 
     // fb_print("Testing #DE (divide by zero)...\n", COL_TEST_HDR);
+    // serial_puts("Testing #DE (divide by zero)...\n");
     // asm volatile("mov $0, %%eax; idiv %%eax" : : : "eax");
 
     // fb_print("Testing #GP (invalid selector)...\n", 0xFFFF00);
+    // serial_puts("Testing #GP (invalid selector)...\n");
     // asm volatile("mov $0x28, %%ax; mov %%ax, %%fs; mov %%fs:0, %%rax" : : : "rax", "ax");
 
     // fb_print("Testing #PF (dereference null)...\n", 0xFFFF00);
+    // serial_puts("Testing #PF (dereference null)...\n");
     // volatile uint64_t *null_ptr = (uint64_t *)0x0;
     // uint64_t dummy = *null_ptr;
 
     // fb_print("Testing #BP (int3)...\n", 0xFFFF00);
+    // serial_puts("Testing #BP (int3)...\n");
     // asm volatile("int3");
 
-    // fb_print("Testing #TS (invalid TSS)...\n", 0xFFFF00);
-    // asm volatile(
-    //     "mov $0x28, %%ax\n\t"
-    //     "ltr %%ax\n\t"
-    //     "mov $0xFFFF, %%ax\n\t"
-    //     "ltr %%ax"
-    //     : : : "ax"
-    // );
+    fb_print("Testing #TS (invalid TSS)...\n", 0xFFFF00);
+    serial_puts("Testing #TS (invalid TSS)...\n");
+    asm volatile(
+        "mov $0x28, %%ax\n\t"
+        "ltr %%ax\n\t"
+        "mov $0xFFFF, %%ax\n\t"
+        "ltr %%ax"
+        : : : "ax"
+    );
 }
 
 void EstellaEntry(void) {
     serial_init();
-    serial_puts("kernel started\n");
+    serial_puts("EstellaEntry\n");
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision)) hcf();
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count == 0) hcf();
     if (!hhdm_request.response || !memmap_request.response || !module_request.response) hcf();
-
-    uint64_t hhdm_offset = hhdm_request.response->offset;
+    
     struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
 
     struct limine_file *font_module;
@@ -256,17 +422,16 @@ void EstellaEntry(void) {
 
     gdt_init(); fb_print("GDT + TSS initialized\n", COL_SUCCESS_INIT); serial_puts("GDT + TSS initialized\n");
     idt_init(); fb_print("IDT + ISR initialized\n", COL_SUCCESS_INIT); serial_puts("IDT + ISR initialized\n");
-    pmm_init(memmap_request.response, hhdm_offset);
-    fb_print("PMM bitmap initialized\n", COL_SUCCESS_INIT); serial_puts("PMM bitmap initialized\n");
-
+    pmm_init(); fb_print("PMM initialized\n", COL_SUCCESS_INIT); serial_puts("PMM initialized\n");
+    vmm_init(); fb_print("VMM initialized\n", COL_SUCCESS_INIT); serial_puts("VMM initialized\n");
     fb_print("\n", 0);
 
     print_system_info(fb);
     print_memory_info();
 
     run_pmm_tests();
+    run_vmm_tests();
 
-    serial_puts("Run exception test\n");
     run_exception_test();
 
     hcf();

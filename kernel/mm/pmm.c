@@ -2,6 +2,8 @@
 #include <mm/pmm.h>
 #include <stdbool.h>
 #include <klib/memory.h>
+#include <drivers/serial.h>
+#include <klib/string.h>
 
 static uint8_t *pmm_bitmap; 
 static size_t pmm_bitmap_bytes;
@@ -11,7 +13,9 @@ static size_t pmm_usable_frames_count;
 static size_t pmm_free_frames_count;
 static size_t pmm_used_frames_count;
 static size_t next_fit_hint = 0;
-uint64_t g_hhdm_offset;
+extern struct limine_hhdm_request hhdm_request;
+extern struct limine_memmap_request memmap_request;
+uint64_t hhdm_offset;
 
 static uint64_t align_up(uint64_t value, uint64_t align) {
     return (value + align - 1) & ~(align - 1);
@@ -19,6 +23,10 @@ static uint64_t align_up(uint64_t value, uint64_t align) {
 
 static uint64_t align_down(uint64_t value, uint64_t align) {
     return value & ~(align - 1);
+}
+
+static size_t bytes_to_frames_ceil(size_t bytes) {
+    return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
 }
 
 static bool is_ram_type(uint64_t type) {
@@ -39,7 +47,10 @@ static bool pmm_test_frame(size_t frame) {
     return (pmm_bitmap[frame / 8] & (uint8_t)(1u << (frame % 8))) != 0;
 }
 
-void pmm_init(const struct limine_memmap_response *memmap, uint64_t hhdm_offset) {
+void pmm_init() {
+    const struct limine_memmap_response *memmap = memmap_request.response;
+    hhdm_offset = hhdm_request.response->offset;
+
     uint64_t max_addr = 0;
     size_t usable_frames = 0;
     size_t total_ram_frames = 0;
@@ -153,10 +164,12 @@ void *pmm_alloc(void) {
 void *pmm_alloc_zeroed(void) {
     void *page = pmm_alloc();
     if(page) {
-        memset(page + g_hhdm_offset, 0, PAGE_SIZE);
+        memset(page + hhdm_offset, 0, PAGE_SIZE);
     }
     return page;
 }
+
+
 
 void *pmm_alloc_frames(size_t count) {
     if (count == 0 || pmm_free_frames_count < count) {
@@ -203,7 +216,7 @@ void *pmm_alloc_frames(size_t count) {
 void *pmm_alloc_frames_zeroed(size_t count) {
     void *pages = pmm_alloc_frames(count);
     if (pages) {
-        memset(pages + g_hhdm_offset, 0, count * PAGE_SIZE);
+        memset(pages + hhdm_offset, 0, count * PAGE_SIZE);
     }
     return pages;
 }
@@ -221,12 +234,85 @@ void pmm_free_frames(void *phys_addr, size_t count) {
     for (size_t i = 0; i < count; i++) {
         size_t cur = frame + i;
         if (cur >= pmm_bitmap_frames) break;
-        if (pmm_test_frame(cur)) {
-            pmm_clear_frame(cur);
-            pmm_free_frames_count++;
-            pmm_used_frames_count--;
+
+        if (!pmm_test_frame(cur)) {
+            serial_puts("pmm_free_frames: double-free or invalid free at frame ");
+            char buf[32];
+            u64_to_dec(cur, buf);
+            serial_puts(buf);
+            serial_puts("\n");
+            continue;
+        }
+        pmm_clear_frame(cur);
+        pmm_free_frames_count++;
+        pmm_used_frames_count--;
+    }
+}
+
+void *pmm_alloc_frames_aligned(size_t count, size_t alignment) {
+    if (count == 0 || pmm_free_frames_count < count || alignment == 0) {
+        return NULL;
+    }
+
+    if (alignment < PAGE_SIZE) {
+        alignment = PAGE_SIZE;
+    }
+
+    size_t frame = next_fit_hint;
+    size_t wrap_point = frame;
+    size_t run_start = 0;
+    size_t run_length = 0;
+    bool wrapped = false;
+
+    while (true) {
+        if (!pmm_test_frame(frame)) {
+            if (run_length == 0 && ((frame * PAGE_SIZE) % alignment == 0)) {
+                run_start = frame;
+                run_length = 1;
+            } else if (run_length > 0) {
+                run_length++;
+            }
+
+            if (run_length == count) {
+                for (size_t i = 0; i < count; i++) {
+                    pmm_set_frame(run_start + i);
+                }
+                pmm_free_frames_count -= count;
+                pmm_used_frames_count += count;
+
+                next_fit_hint = (run_start + count) % pmm_bitmap_frames;
+                return (void *)(run_start * PAGE_SIZE);
+            }
+        } else {
+            run_length = 0;
+        }
+
+        frame = (frame + 1) % pmm_bitmap_frames;
+        if (frame == wrap_point) {
+            if (wrapped) break;
+            wrapped = true;
         }
     }
+
+    return NULL;
+}
+
+void *pmm_alloc_frames_aligned_zeroed(size_t count, size_t alignment) {
+    void *pages = pmm_alloc_frames_aligned(count, alignment);
+    if (pages) {
+        memset((void *)((uint64_t)pages + hhdm_offset), 0, count * PAGE_SIZE);
+    }
+    return pages;
+}
+
+void *pmm_alloc_aligned(size_t bytes, size_t alignment) {
+    size_t count = bytes_to_frames_ceil(bytes);
+    return pmm_alloc_frames_aligned(count, alignment);
+}
+
+void *pmm_alloc_aligned_zeroed(size_t bytes, size_t alignment) {
+    size_t count = bytes_to_frames_ceil(bytes);
+    return pmm_alloc_frames_aligned_zeroed(count, alignment);
 }
 
 size_t pmm_get_total_frames(void) {

@@ -1,5 +1,5 @@
-#ifndef KERNEL_GDT_H
-#define KERNEL_GDT_H
+#ifndef ESTELLA_ARCH_X86_64_GDT_H
+#define ESTELLA_ARCH_X86_64_GDT_H
 
 #include <stdint.h>
 

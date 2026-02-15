@@ -1,5 +1,5 @@
-#ifndef KERNEL_PMM_H
-#define KERNEL_PMM_H
+#ifndef ESTELLA_MM_PMM_H
+#define ESTELLA_MM_PMM_H
 
 #include <stdint.h>
 #include <stddef.h>

@@ -1,5 +1,5 @@
-#ifndef KERNEL_IDT_H
-#define KERNEL_IDT_H
+#ifndef ESTELLA_ARCH_X86_64_IDT_H
+#define ESTELLA_ARCH_X86_64_IDT_H
 
 #include <stdint.h>
 

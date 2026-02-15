@@ -1,5 +1,5 @@
-#ifndef KERNEL_FBTEXT_H
-#define KERNEL_FBTEXT_H
+#ifndef ESTELLA_DRIVERS_FBTEXT_H
+#define ESTELLA_DRIVERS_FBTEXT_H
 
 #include <stdbool.h>
 #include <stdint.h>

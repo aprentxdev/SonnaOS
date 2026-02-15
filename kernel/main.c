@@ -8,6 +8,7 @@
 #include <klib/string.h>
 #include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
+#include <arch/x86_64/acpi.h>
 #include <drivers/font.h>
 #include <drivers/fbtext.h>
 #include <drivers/serial.h>
@@ -15,7 +16,7 @@
 #include <mm/vmm.h>
 #include <colors.h>
 
-#define ESTELLA_VERSION "v0.Estella.4.0"
+#define ESTELLA_VERSION "v0.Estella.5.0"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -53,6 +54,12 @@ static volatile struct limine_module_request module_request = {
 __attribute__((used, section(".limine_requests")))
 volatile struct limine_hhdm_request hhdm_request = {
     .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_rsdp_request rsdp_request = {
+    .id = LIMINE_RSDP_REQUEST_ID,
     .revision = 0
 };
 
@@ -364,29 +371,29 @@ void run_vmm_tests(void) {
 
 __attribute__((unused)) 
 static void run_exception_test(void) {
-    // fb_print("Testing #UD (invalid opcode (ud2))...\n", COL_TEST_HDR);
-    // serial_puts("Testing #UD (invalid opcode (ud2))...\n");
+    // fb_print("Testing #UD (invalid opcode (ud2)) - 6 vector...\n", COL_TEST_HDR);
+    // serial_puts("Testing #UD (invalid opcode (ud2)) - 6 vector...\n");
     // asm volatile("ud2");
 
-    // fb_print("Testing #DE (divide by zero)...\n", COL_TEST_HDR);
-    // serial_puts("Testing #DE (divide by zero)...\n");
+    // fb_print("Testing #DE (divide by zero) - 0 vector...\n", COL_TEST_HDR);
+    // serial_puts("Testing #DE (divide by zero) - 0 vector...\n");
     // asm volatile("mov $0, %%eax; idiv %%eax" : : : "eax");
 
-    // fb_print("Testing #GP (invalid selector)...\n", 0xFFFF00);
-    // serial_puts("Testing #GP (invalid selector)...\n");
+    // fb_print("Testing #GP (invalid selector) - 13 vector...\n", 0xFFFF00);
+    // serial_puts("Testing #GP (invalid selector) - 13 vector...\n");
     // asm volatile("mov $0x28, %%ax; mov %%ax, %%fs; mov %%fs:0, %%rax" : : : "rax", "ax");
 
-    // fb_print("Testing #PF (dereference null)...\n", 0xFFFF00);
-    // serial_puts("Testing #PF (dereference null)...\n");
+    // fb_print("Testing #PF (dereference null) - 14 vector...\n", 0xFFFF00);
+    // serial_puts("Testing #PF (dereference null) - 14 vector...\n");
     // volatile uint64_t *null_ptr = (uint64_t *)0x0;
     // uint64_t dummy = *null_ptr;
 
-    // fb_print("Testing #BP (int3)...\n", 0xFFFF00);
-    // serial_puts("Testing #BP (int3)...\n");
+    // fb_print("Testing #BP (int3) - 3 vector...\n", 0xFFFF00);
+    // serial_puts("Testing #BP (int3) - 3 vector...\n");
     // asm volatile("int3");
 
-    fb_print("Testing #TS (invalid TSS)...\n", 0xFFFF00);
-    serial_puts("Testing #TS (invalid TSS)...\n");
+    fb_print("Testing #TS (invalid TSS) - 13 vector...\n", 0xFFFF00);
+    serial_puts("Testing #TS (invalid TSS) - 13 vector...\n");
     asm volatile(
         "mov $0x28, %%ax\n\t"
         "ltr %%ax\n\t"
@@ -396,12 +403,49 @@ static void run_exception_test(void) {
     );
 }
 
+static void test_acpi(struct limine_rsdp_response *rsdp_resp) {
+    char buf[32];
+    void *rsdp_ptr = rsdp_resp->address;
+
+    struct xsdt* xsdt = acpi_get_xsdt(rsdp_ptr);
+    if (!xsdt) {
+        serial_puts("XSDT not found!\n");
+        return;
+    }
+
+    serial_puts("XSDT found: ");
+    u64_to_hex((uint64_t)xsdt, buf);
+    serial_puts(buf);
+    serial_puts(", length = ");
+    u64_to_dec(xsdt->header.length, buf);
+    serial_puts(buf);
+    serial_puts("\n");
+
+    struct madt* madt = acpi_get_madt(rsdp_ptr);
+    if (!madt) {
+        serial_puts("MADT not found!\n");
+        return;
+    }
+
+    serial_puts("MADT found: ");
+    u64_to_hex((uint64_t)madt, buf);
+    serial_puts(buf);
+    serial_puts("\nLAPIC address = ");
+    u64_to_hex((uint64_t)madt->lapic_address, buf);
+    serial_puts(buf);
+    serial_puts("\nflags = ");
+    u64_to_hex((uint64_t)madt->flags, buf);
+    serial_puts(buf);
+    serial_puts("\n");
+}
+
 void EstellaEntry(void) {
     serial_init();
     serial_puts("EstellaEntry\n");
     if (!LIMINE_BASE_REVISION_SUPPORTED(limine_base_revision)) hcf();
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count == 0) hcf();
-    if (!hhdm_request.response || !memmap_request.response || !module_request.response) hcf();
+    if (!hhdm_request.response || !memmap_request.response || !module_request.response || !rsdp_request.response) hcf();
+
     
     struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
 
@@ -424,6 +468,10 @@ void EstellaEntry(void) {
     idt_init(); fb_print("IDT + ISR initialized\n", COL_SUCCESS_INIT); serial_puts("IDT + ISR initialized\n");
     pmm_init(); fb_print("PMM initialized\n", COL_SUCCESS_INIT); serial_puts("PMM initialized\n");
     vmm_init(); fb_print("VMM initialized\n", COL_SUCCESS_INIT); serial_puts("VMM initialized\n");
+
+    struct limine_rsdp_response *rsdp_resp = rsdp_request.response;
+    test_acpi(rsdp_resp);
+    
     fb_print("\n", 0);
 
     print_system_info(fb);

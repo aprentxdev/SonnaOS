@@ -1,5 +1,5 @@
-#ifndef KERNEL_FONT_H
-#define KERNEL_FONT_H
+#ifndef ESTELLA_DRIVERS_FONT_H
+#define ESTELLA_DRIVERS_FONT_H
 
 #include <stdbool.h>
 #include <stdint.h>

@@ -7,6 +7,7 @@ Writing an operating system because I want to occupy my time...
 ### Current status
 - Boots on x86_64 UEFI (Limine).
 - GDT/IDT/TSS up.
+- ACPI: RSDP, XSDT, and MADT recognized
 - PMM + VMM implemented.
 - Huge pages supported.
 - Runtime self-tests pass.

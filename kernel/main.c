@@ -15,7 +15,7 @@
 #include <mm/vmm.h>
 #include <colors.h>
 
-#define ESTELLA_VERSION "v0.Estella.3.3"
+#define ESTELLA_VERSION "v0.Estella.4.0"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -432,7 +432,7 @@ void EstellaEntry(void) {
     run_pmm_tests();
     run_vmm_tests();
 
-    run_exception_test();
+    // run_exception_test();
 
     hcf();
 }

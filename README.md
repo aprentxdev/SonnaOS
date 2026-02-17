@@ -1,28 +1,46 @@
 # SonnaOS
-Writing an operating system because I want to occupy my time...  
+Writing an operating system to explore low-level architecture and hardware programming. (because I want to occupy my time)
 
 ### Hardware Requirements
 - **Firmware**: UEFI
-- **CPU**: 64-bit x86 processor with x2APIC support
+- **CPU**: 64-bit x86 processor **with x2APIC** support
 - **ACPI 2.0+**
 
 ## Kernel
 **Estella** - x86_64 EFI kernel using the Limine bootloader protocol.
 
-### Current status
+## Current status
+### Boot & CPU setup
 - Boots on x86_64 UEFI via Limine
-- GDT, TSS, IDT + ISRs ready
-- ACPI: RSDP/XSDT/MADT parsed, LAPIC + IOAPIC initialized
-- PMM + VMM up and passing self-tests
-- PS/2 keyboard driver working
-- Framebuffer console (Spleen 12×24 .psfu)
+- GDT + TSS initialized
+- IDT + ISRs installed
 
-### Output
-- Serial debug
-- Framebuffer text mode
+### ACPI & Interrupts
+- ACPI: RSDP / XSDT / MADT / HPET parsed
+- x2APIC enabled
+- LAPIC + IOAPIC initialized
+- LAPIC running in TSC-deadline mode when invariant TSC is present
 
-### Next:
-- x2APIC TSC-deadline
+### Time subsystem
+- TSC frequency detection via CPUID (0x15/0x16) when available
+- HPET-based TSC calibration fallback
+- TSC-based stopwatch utility
+
+### Memory
+- Physical Memory Manager (PMM)
+- Virtual Memory Manager (VMM)
+- Self-tests for memory subsystems
+
+### Devices
+- PS/2 keyboard driver
+    - Basic debug key triggers:
+        - t — toggle stopwatch
+        - q — trigger panic
+
+### Console
+- Serial debug output
+- Framebuffer text console (Spleen 12×24 .psfu)
+
 
 ---
 ![screenshot](sonnaos.png)

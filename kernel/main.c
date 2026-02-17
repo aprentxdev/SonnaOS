@@ -17,8 +17,9 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <colors.h>
+#include <stopwatch.h>
 
-#define ESTELLA_VERSION "v0.Estella.6.0"
+#define ESTELLA_VERSION "v0.Estella.7.0"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -79,12 +80,25 @@ void hcf(void) {
 
 static void print_system_info(struct limine_framebuffer *fb) {
     fb_print_value("SonnaOS", "https://github.com/eteriaal/SonnaOS", COL_TITLE, 0x20B2AA);
-    fb_print("\n", 0);
 
-    fb_print(ESTELLA_VERSION " x86_64 EFI | limine protocol\n", COL_VERSION);
-    fb_print("Using Spleen font 12x24 .psfu (psf2)\n", COL_INFO);
+    if (firmware_type_request.response) {
+        const char *fw = "Unknown";
+        switch (firmware_type_request.response->firmware_type) {
+            case LIMINE_FIRMWARE_TYPE_X86BIOS: fw = "BIOS"; break;
+            case LIMINE_FIRMWARE_TYPE_EFI32: fw = "EFI32"; break;
+            case LIMINE_FIRMWARE_TYPE_EFI64: fw = "EFI64"; break;
+            case LIMINE_FIRMWARE_TYPE_SBI: fw = "SBI"; break;
+        }
+        fb_print_value("   Firmware:   ", fw, COL_LABEL, COL_VALUE);
+        fb_print("\n", 0);
 
-    fb_print("\n", 0);
+        serial_puts("Firmware: ");
+        serial_puts(fw);
+        serial_puts("\n");
+    }
+
+    fb_print(ESTELLA_VERSION " x86_64 EFI | limine protocol", COL_VERSION);
+
 
     if (bootloader_info_request.response) {
         char bootloader_str[64];
@@ -105,34 +119,13 @@ static void print_system_info(struct limine_framebuffer *fb) {
 
             bootloader_str[pos < sizeof(bootloader_str) ? pos : sizeof(bootloader_str) - 1] = '\0'; 
         }
-        fb_print_value("Bootloader: ", bootloader_str, COL_LABEL, COL_VALUE);
+        fb_print_value("   Bootloader: ", bootloader_str, COL_LABEL, COL_VALUE);
         fb_print("\n", 0);
 
         serial_puts("Bootloader: ");
         serial_puts(bootloader_str);
         serial_puts("\n");
     }
-
-    if (firmware_type_request.response) {
-        const char *fw = "Unknown";
-        switch (firmware_type_request.response->firmware_type) {
-            case LIMINE_FIRMWARE_TYPE_X86BIOS: fw = "BIOS"; break;
-            case LIMINE_FIRMWARE_TYPE_EFI32: fw = "EFI32"; break;
-            case LIMINE_FIRMWARE_TYPE_EFI64: fw = "EFI64"; break;
-            case LIMINE_FIRMWARE_TYPE_SBI: fw = "SBI"; break;
-        }
-        fb_print_value("Firmware:   ", fw, COL_LABEL, COL_VALUE);
-        fb_print("\n", 0);
-
-        serial_puts("Firmware: ");
-        serial_puts(fw);
-        serial_puts("\n");
-    }
-
-    char fb_addr[20] = {0};
-    u64_to_hex((uint64_t)fb->address, fb_addr);
-    fb_print_value("Framebuffer:", fb_addr, COL_LABEL, COL_ADDRESS);
-    fb_print("\n\n", 0);
 }
 
 static void print_memory_info(void) {
@@ -292,44 +285,64 @@ void EstellaEntry(void) {
     fbtext_init(fb, &font);
 
     // init everything
-    gdt_init(); fb_print("GDT + TSS initialized\n", COL_SUCCESS_INIT); serial_puts("GDT + TSS initialized\n");
-    idt_init(); fb_print("IDT + ISR initialized\n", COL_SUCCESS_INIT); serial_puts("IDT + ISR initialized\n");
-    pmm_init(); fb_print("PMM initialized\n", COL_SUCCESS_INIT); serial_puts("PMM initialized\n");
-    vmm_init(); fb_print("VMM initialized\n", COL_SUCCESS_INIT); serial_puts("VMM initialized\n");
-    apic_init(); fb_print("LAPIC + IOAPIC initialized\n", COL_SUCCESS_INIT); serial_puts("LAPIC + IOAPIC initialized\n");
-    keyboard_init(); fb_print("Keyboard initialized\n", COL_SUCCESS_INIT); serial_puts("Keyboard initialized\n");
+    gdt_init(); fb_print("GDT with TSS initialized;", COL_SUCCESS_INIT);
+    idt_init(); fb_print("  IDT initialized;", COL_SUCCESS_INIT);
+    pmm_init(); fb_print("  PMM initialized;", COL_SUCCESS_INIT); 
+    vmm_init(); fb_print("  VMM initialized;", COL_SUCCESS_INIT); 
+    apic_init(); fb_print("  APIC initialized;", COL_SUCCESS_INIT);
+    keyboard_init(); fb_print("  PS/2 keyboard driver initialized\n", COL_SUCCESS_INIT);
+    stopwatch_init();
 
     run_pmm_tests();
     run_vmm_tests();
 
     fb_print("\n", 0);
     print_system_info(fb);
+    fb_print("\n", 0);
     print_memory_info();
 
     // Enabling interrupts
     asm volatile("sti");
 
-    fb_print("Press any key to trigger kernel panic from #TS\n", COL_INFO);
-    serial_puts("Press any key to trigger kernel panic from #TS\n");
-    while (1) {
-        if (keyboard_has_data()) {
+    fb_print("Controls:\n", COL_INFO);
+    fb_print("  t : Start / Pause stopwatch\n", COL_INFO);
+    fb_print("  q : Trigger kernel panic (from #TS)\n", COL_INFO);
+    fb_print("\n", 0);
+
+    serial_puts("Controls: t = toggle stopwatch, q = trigger panic\n");
+
+    while (1)
+    {
+        if (keyboard_has_data())
+        {
             char ch = keyboard_get_char();
-            if (ch != 0) {
-                fb_print("Pressed: '", COL_INFO);
-                char tmp[2] = {ch, '\0'};
-                fb_print(tmp, COL_USED);
-                fb_print("'\n", COL_INFO);
 
-                serial_puts("Pressed: '");
-                serial_putc(ch);
-                serial_puts("'\n");
+            if (ch != 0)
+            {
+                switch (ch)
+                {
+                    case 't':
+                    case 'T':
+                        stopwatch_toggle();
+                        break;
 
-                fb_print("\n", 0);
-                serial_puts("\n");
-
-                trigger_panic();
+                    case 'q':
+                    case 'Q':
+                        fb_print("\nTriggering test panic...\n", COL_FAIL);
+                        serial_puts("\nTriggering test panic...\n");
+                        trigger_panic();
+                        break;
+                    default:
+                        break;
+                }
             }
         }
+
+        uint64_t now = timer_get_tsc();
+        stopwatch_update(now, tsc_frequency_hz);
+
+        asm volatile("pause");
     }
+
     hcf();
 }

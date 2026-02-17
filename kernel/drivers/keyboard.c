@@ -1,6 +1,7 @@
 #include <drivers/keyboard.h>
 #include <arch/x86_64/apic.h>
 #include <arch/x86_64/io.h>
+#include <drivers/serial.h>
 
 static const char ascii_base[128] = {
     0,   0,   '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
@@ -89,8 +90,7 @@ void keyboard_handler(void) {
         }
     }
 
-    volatile uint32_t* lapic = (volatile uint32_t*)lapic_va;
-    lapic[LAPIC_EOI / 4] = 0;
+    lapic_eoi();
 }
 
 extern void keyboard_isr(void);
@@ -104,6 +104,7 @@ void keyboard_init(void) {
         IOREDTBL_DELMODE_FIXED,
         0
     );
+    serial_puts("PS/2 keyboard driver initialized\n");
 }
 
 bool keyboard_has_data(void) {

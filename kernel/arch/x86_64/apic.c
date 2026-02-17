@@ -5,25 +5,78 @@
 
 #include <arch/x86_64/acpi.h>
 #include <arch/x86_64/apic.h>
+#include <arch/x86_64/cpuid.h>
+#include <arch/x86_64/msr.h>
 #include <mm/vmm.h>
 #include <drivers/serial.h>
 #include <klib/string.h>
+#include <arch/x86_64/io.h>
+#include <arch/x86_64/hpet.h>
+
+void ioapic_init_all(void* madt_ptr);
 
 volatile uint64_t lapic_ticks = 0;
 uint64_t lapic_phys = 0;
 uint64_t lapic_va = 0;
 
+bool x2apic_enabled = false;
+
+uint64_t tsc_frequency_hz = 0;
+uint64_t tsc_ticks_per_10ms = 0;
+
 ioapic_t ioapics[8];
 size_t ioapic_count = 0;
 
-void lapic_timer_handler(void) {
-    lapic_ticks++;
+volatile bool lapic_timer_needed = false;
 
-    volatile uint32_t* lapic = (volatile uint32_t*)lapic_va;
-    lapic[LAPIC_EOI / 4] = 0;
+static inline uint64_t rdtsc(void) {
+    uint32_t low, high;
+    asm volatile("rdtsc" : "=a"(low), "=d"(high));
+    return ((uint64_t)high << 32) | low;
 }
 
-void ioapic_init_all(void* madt_ptr);
+uint64_t timer_get_tsc(void) {
+    return rdtsc();
+}
+
+static inline uint32_t lapic_read(uint32_t reg) {
+    if (x2apic_enabled) {
+        uint32_t msr = 0x800 + (reg >> 4);
+        return (uint32_t)rdmsr(msr);
+    } else {
+        volatile uint32_t* lapic = (volatile uint32_t*)lapic_va;
+        return lapic[reg / 4];
+    }
+}
+
+static inline void lapic_write(uint32_t reg, uint32_t value) {
+    if (x2apic_enabled) {
+        uint32_t msr = 0x800 + (reg >> 4);
+        wrmsr(msr, value);
+    } else {
+        volatile uint32_t* lapic = (volatile uint32_t*)lapic_va;
+        lapic[reg / 4] = value;
+    }
+}
+
+void lapic_eoi(void) {
+    lapic_write(LAPIC_EOI, 0);
+}
+
+void lapic_timer_handler(void) {
+    lapic_eoi();
+
+    if (!lapic_timer_needed) {
+        return;
+    }
+
+    lapic_ticks++;
+    
+    if (x2apic_enabled) {
+        uint64_t next_deadline = rdtsc() + tsc_ticks_per_10ms;
+        wrmsr(IA32_TSC_DEADLINE, next_deadline);
+    }
+}
 
 void apic_init() {
     void *rsdp_ptr = rsdp_request.response->address;
@@ -36,24 +89,133 @@ void apic_init() {
     lapic_va = lapic_phys + hhdm_offset;
 
     vmm_map(lapic_va, lapic_phys, PTE_KERNEL_RW | PTE_PCD | PTE_PWT);
-    volatile uint32_t* lapic = (volatile uint32_t*)lapic_va;
-    lapic[LAPIC_ESR / 4] = 0;
-    lapic[LAPIC_TPR / 4] = 0;
-    lapic[LAPIC_SVR / 4] = LAPIC_SVR_ENABLE | LAPIC_SPURIOUS_VECTOR;
-    lapic[LAPIC_LVT_TIMER / 4] = LAPIC_MASKED | LAPIC_TIMER_VECTOR;
-    lapic[LAPIC_LVT_THERMAL / 4] = LAPIC_MASKED;
-    lapic[LAPIC_LVT_PERF / 4] = LAPIC_MASKED;
-    lapic[LAPIC_LVT_LINT0 / 4] = LAPIC_MASKED;
-    lapic[LAPIC_LVT_LINT1 / 4] = LAPIC_MASKED;
-    lapic[LAPIC_LVT_ERROR / 4] = LAPIC_MASKED | LAPIC_ERROR_VECTOR;
-    lapic[LAPIC_TIMER_DCR / 4] = 0b0011;
-    lapic[LAPIC_LVT_TIMER / 4] = LAPIC_TIMER_VECTOR | LAPIC_MODE_PERIODIC;
-    lapic[LAPIC_TIMER_INIT / 4] = 1000000;
-    lapic[LAPIC_LVT_ERROR / 4] &= ~LAPIC_MASKED;
+
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(1, &eax, &ebx, &ecx, &edx);
+
+    bool x2apic_supported = (ecx & (1U << 21)) != 0;
+    bool tsc_deadline_supported = (ecx & (1U << 24)) != 0;
+
+    if (x2apic_supported) {
+        serial_puts("x2APIC supported\n");
+
+        uint64_t apic_base = rdmsr(IA32_APIC_BASE_MSR);
+        apic_base |= IA32_APIC_BASE_ENABLE | IA32_APIC_BASE_X2APIC;
+        wrmsr(IA32_APIC_BASE_MSR, apic_base);
+
+        x2apic_enabled = true;
+    } else {
+        serial_puts("x2APIC not supported\n");
+        x2apic_enabled = false;
+        return;
+    }
+
+    bool tsc_invariant = false;
+
+    cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
+    uint32_t max_ext_leaf = eax;
+
+    if (max_ext_leaf >= 0x80000007) {
+        cpuid(0x80000007, &eax, &ebx, &ecx, &edx);
+        tsc_invariant = (edx & (1 << 8)) != 0;
+    }
+
+    if (!tsc_invariant)
+        serial_puts("TSC not invariant\n");
+
+    tsc_frequency_hz = 0;
+    tsc_ticks_per_10ms = 0;
+
+    cpuid(0, &eax, &ebx, &ecx, &edx);
+    uint32_t max_leaf = eax;
+
+    if (max_leaf >= 0x15) {
+        cpuid(0x15, &eax, &ebx, &ecx, &edx);
+
+        if (eax && ebx && ecx) {
+            tsc_frequency_hz = ((uint64_t)ecx * ebx) / eax;
+        }
+    }
+
+    if (tsc_frequency_hz == 0 && max_leaf >= 0x16) {
+        cpuid(0x16, &eax, &ebx, &ecx, &edx);
+
+        if (eax)
+            tsc_frequency_hz = (uint64_t)eax * 1000000ULL;
+    }
+
+    if (tsc_frequency_hz) {
+        tsc_ticks_per_10ms = tsc_frequency_hz / 100;
+        serial_puts("TSC calibrated via CPUID\n");
+    } else {
+        serial_puts("TSC calibration via CPUID failed, trying via HPET\n");
+
+        hpet_init(rsdp_request.response->address);
+        if (hpet_frequency_hz == 0) {
+            serial_puts("HPET init failed, no TSC calibration\n");
+            return;
+        }
+        const uint64_t calibration_duration_ns = 100000000ULL;
+        const uint64_t ticks_to_wait = (hpet_frequency_hz * calibration_duration_ns) / 1000000000ULL;
+
+        uint64_t hpet_start = hpet_read(HPET_MAIN_COUNTER);
+        uint64_t tsc_start = rdtsc();
+
+        while (hpet_read(HPET_MAIN_COUNTER) - hpet_start < ticks_to_wait) {
+            asm("pause");
+        }
+
+        uint64_t tsc_end = rdtsc();
+        uint64_t hpet_end = hpet_read(HPET_MAIN_COUNTER);
+
+        uint64_t hpet_delta = hpet_end - hpet_start;
+        uint64_t tsc_delta = tsc_end - tsc_start;
+
+        tsc_frequency_hz = (tsc_delta * hpet_frequency_hz) / hpet_delta;
+
+        tsc_ticks_per_10ms = tsc_frequency_hz / 100ULL;
+
+        serial_puts("TSC calibrated via HPET: ");
+        char buf[32];
+        u64_to_dec(tsc_frequency_hz, buf);
+        serial_puts(buf);
+        serial_puts(" Hz\n");
+    }
+
+
+    bool use_tsc_deadline = tsc_deadline_supported && (tsc_frequency_hz != 0) && tsc_invariant;
+
+    lapic_write(LAPIC_ESR, 0);
+    lapic_write(LAPIC_TPR, 0);
+    lapic_write(LAPIC_SVR, LAPIC_SVR_ENABLE | LAPIC_SPURIOUS_VECTOR);
+    lapic_write(LAPIC_LVT_TIMER, LAPIC_MASKED | LAPIC_TIMER_VECTOR);
+    lapic_write(LAPIC_LVT_THERMAL, LAPIC_MASKED);
+    lapic_write(LAPIC_LVT_PERF, LAPIC_MASKED);
+    lapic_write(LAPIC_LVT_LINT0, LAPIC_MASKED);
+    lapic_write(LAPIC_LVT_LINT1, LAPIC_MASKED);
+    lapic_write(LAPIC_LVT_ERROR, LAPIC_MASKED | LAPIC_ERROR_VECTOR);
+
+    if (use_tsc_deadline) {
+        serial_puts("Using TSC-deadline timer\n");
+
+        lapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_LVT_TIMER_TSC_DEADLINE);
+
+        wrmsr(IA32_TSC_DEADLINE, 0);
+        wrmsr(IA32_TSC_DEADLINE, rdtsc() + tsc_ticks_per_10ms);
+    } else {
+        serial_puts("Using periodic LAPIC timer\n");
+
+        lapic_write(LAPIC_TIMER_DCR, 0b0011);
+        lapic_write(LAPIC_LVT_TIMER, LAPIC_TIMER_VECTOR | LAPIC_MODE_PERIODIC);
+        lapic_write(LAPIC_TIMER_INIT, 1000000);
+    }
+
+    lapic_write(LAPIC_LVT_ERROR, LAPIC_ERROR_VECTOR);
 
     ioapic_init_all(madt);
-}
 
+    serial_puts("APIC initialized\n");
+}
 
 static inline void ioapic_write_internal(volatile uint32_t* base, uint32_t reg, uint32_t value) {
     base[0] = reg;

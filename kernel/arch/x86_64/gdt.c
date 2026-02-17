@@ -1,4 +1,5 @@
 #include <arch/x86_64/gdt.h>
+#include <drivers/serial.h>
 
 #define GDT_ENTRIES 7
 
@@ -93,4 +94,6 @@ void gdt_init(void) {
 
     uint16_t tss_sel = 0x28;
     asm volatile ("ltr %0" : : "r"(tss_sel) : "memory");
+
+    serial_puts("GDT with TSS initialized\n");
 }

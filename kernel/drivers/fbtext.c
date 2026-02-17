@@ -8,6 +8,9 @@ static struct limine_framebuffer *g_fb = NULL;
 static font_t *g_font = NULL;
 static size_t g_cursor_x = LEFT_MARGIN;
 static size_t g_cursor_y = 15;
+static bool overwrite = false;
+static size_t overwrite_pos = 0;
+
 
 void fbtext_init(struct limine_framebuffer *fb, font_t *font)
 {
@@ -42,17 +45,68 @@ static void fb_advance(size_t pixels)
     }
 }
 
+static void fb_clear_area(size_t x, size_t y, size_t width, size_t height, uint32_t color)
+{
+    if (!g_fb || x >= g_fb->width || y >= g_fb->height) return;
+
+    uint32_t *pixels = (uint32_t *)g_fb->address;
+    size_t stride = g_fb->pitch / sizeof(uint32_t);
+
+    size_t max_x = g_fb->width;
+    size_t max_y = g_fb->height;
+
+    if (x + width > max_x)  width  = max_x - x;
+    if (y + height > max_y) height = max_y - y;
+    if (width == 0 || height == 0) return;
+
+    for (size_t dy = 0; dy < height; dy++) {
+        size_t py = y + dy;
+        for (size_t dx = 0; dx < width; dx++) {
+            size_t px = x + dx;
+            pixels[py * stride + px] = color;
+        }
+    }
+}
+
 void fb_put_char(uint32_t codepoint, uint32_t color)
 {
     if (!g_fb || !g_font || !g_font->glyphs) return;
 
     if (codepoint > 255) codepoint = '?';
 
+    if (codepoint == '\n') {
+        fb_newline();
+        overwrite = false;
+        return;
+    }
+    if (codepoint == '\r') {
+        g_cursor_x = LEFT_MARGIN;
+        overwrite = true;
+        overwrite_pos = LEFT_MARGIN;
+        return;
+    }
+
     if (g_cursor_x + g_font->width > g_fb->width) {
         fb_newline();
+        overwrite = false;
     }
     if (g_cursor_y + g_font->height > g_fb->height) {
         return;
+    }
+
+    if(overwrite) {
+        fb_clear_area(
+            g_cursor_x,
+            g_cursor_y,
+            g_font->width,
+            g_font->height,
+            0x00000000
+        );
+
+        size_t new_right = g_cursor_x + g_font->width;
+        if (new_right > overwrite_pos) {
+            overwrite = new_right;
+        }
     }
 
     uint32_t *fb_pixels = (uint32_t *)g_fb->address;
@@ -93,11 +147,6 @@ void fb_print(const char *str, uint32_t color)
     if (!str) return;
 
     while (*str) {
-        if (*str == '\n') {
-            fb_newline();
-            str++;
-            continue;
-        }
         fb_put_char((uint8_t)*str, color);
         str++;
     }

@@ -186,4 +186,6 @@ void idt_init(void) {
     idtr.base  = (uint64_t)&idt;
 
     asm volatile ("lidt %0" : : "m"(idtr));
+
+    serial_puts("IDT initialized\n");
 }

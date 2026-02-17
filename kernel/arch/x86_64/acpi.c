@@ -36,3 +36,10 @@ struct madt* acpi_get_madt(void* rsdp_ptr) {
 
     return (struct madt*)acpi_find_table(xsdt, "APIC");
 }
+
+struct hpet *acpi_get_hpet(void *rsdp_ptr) {
+    struct xsdt *xsdt = acpi_get_xsdt(rsdp_ptr);
+    if (!xsdt) return NULL;
+
+    return (struct hpet *)acpi_find_table(xsdt, "HPET");
+}

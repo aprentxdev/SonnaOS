@@ -155,6 +155,8 @@ void pmm_init() {
             pmm_used_frames_count++;
         }
     }
+
+    serial_puts("PMM initialized\n");
 }
 
 void *pmm_alloc(void) {

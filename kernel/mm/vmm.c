@@ -193,4 +193,5 @@ void vmm_init(void) {
     uint64_t cr3;
     asm volatile("mov %%cr3, %0" : "=r"(cr3));
     kernel_pml4_phys = cr3 & ~0xFFFULL;
+    serial_puts("VMM initialized\n");
 }

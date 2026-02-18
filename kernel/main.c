@@ -79,7 +79,7 @@ void hcf(void) {
 }
 
 static void print_system_info(struct limine_framebuffer *fb) {
-    fb_print_value("SonnaOS", "https://github.com/eteriaal/SonnaOS", COL_TITLE, 0x20B2AA);
+    fb_print_value("SonnaOS", "https://github.com/aprentxdev/SonnaOS", COL_TITLE, 0x20B2AA);
 
     if (firmware_type_request.response) {
         const char *fw = "Unknown";
@@ -119,7 +119,7 @@ static void print_system_info(struct limine_framebuffer *fb) {
 
             bootloader_str[pos < sizeof(bootloader_str) ? pos : sizeof(bootloader_str) - 1] = '\0'; 
         }
-        fb_print_value("   Bootloader: ", bootloader_str, COL_LABEL, COL_VALUE);
+        fb_print_value("     Bootloader: ", bootloader_str, COL_LABEL, COL_VALUE);
         fb_print("\n", 0);
 
         serial_puts("Bootloader: ");

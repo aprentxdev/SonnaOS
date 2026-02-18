@@ -11,7 +11,7 @@ LDFLAGS = -T x86-64.lds -nostdlib
 
 LIMINE_DIR ?= ./limine
 QEMU ?= qemu-system-x86_64
-QEMU_FLAGS ?=  -enable-kvm -cpu host,+invtsc  \
+QEMU_FLAGS ?= -enable-kvm -cpu host,+invtsc  \
               -M q35 -m 2G -serial stdio -display gtk \
               -device VGA,xres=1920,yres=1080 \
               -no-reboot -no-shutdown

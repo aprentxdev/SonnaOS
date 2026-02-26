@@ -3,8 +3,8 @@
 #include <drivers/fbtext.h>
 #include <drivers/keyboard.h>
 #include <drivers/serial.h>
-#include <arch/x86_64/apic.h>
 #include <colors.h>
+#include <time/time.h>
 
 #define INPUT_BUFFER_SIZE 128
 
@@ -12,7 +12,7 @@ static char input_buffer[INPUT_BUFFER_SIZE];
 static int input_index = 0;
 
 static void print_prompt(void) {
-    fb_print("sh>", 0x7FFFD4);
+    fb_print("sh> ", 0x7FFFD4);
 }
 
 static void clear_input_buffer(void) {
@@ -34,7 +34,10 @@ static void execute_command(const char* cmd) {
         fb_print("\n", 0);
     }
     else if (strcmp(cmd, "time") == 0) {
-        fb_print("later...\n", COL_INFO);
+        char* time = time_get_current();
+        fb_print("time (UTC): ", COL_INFO);
+        fb_print(time, COL_INFO);
+        fb_print("\n", 0);
     }
     else if (strcmp(cmd, "panic") == 0) {
         fb_print("Triggering kernel panic...\n", COL_INFO);
@@ -59,6 +62,13 @@ static void handle_input_char(char c) {
         execute_command(input_buffer);
         clear_input_buffer();
         print_prompt();
+    }
+    else if (c == '\b') {
+        if (input_index > 0) {
+            input_index--;
+            input_buffer[input_index] = 0;
+            fb_print("\b", 0xFFFFFF);
+        }
     }
     else if (c >= 32 && c <= 126) {
         if (input_index < INPUT_BUFFER_SIZE - 1) {

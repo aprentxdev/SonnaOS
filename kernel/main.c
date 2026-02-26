@@ -18,8 +18,9 @@
 #include <mm/vmm.h>
 #include <colors.h>
 #include <kernelshell.h>
+#include <time/time.h>
 
-#define ESTELLA_VERSION "v0.Estella.8.0-pre"
+#define ESTELLA_VERSION "v0.Estella.8.0"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -63,6 +64,12 @@ volatile struct limine_hhdm_request hhdm_request = {
 __attribute__((used, section(".limine_requests")))
 volatile struct limine_rsdp_request rsdp_request = {
     .id = LIMINE_RSDP_REQUEST_ID,
+    .revision = 0
+};
+
+__attribute__((used, section(".limine_requests")))
+volatile struct limine_date_at_boot_request date_at_boot_request = {
+    .id = LIMINE_DATE_AT_BOOT_REQUEST_ID,
     .revision = 0
 };
 
@@ -270,6 +277,7 @@ void EstellaEntry(void) {
     pmm_init(); fb_print("  PMM initialized;", COL_SUCCESS_INIT); 
     vmm_init(); fb_print("  VMM initialized;", COL_SUCCESS_INIT); 
     apic_init(); fb_print("  TSC & APIC initialized;", COL_SUCCESS_INIT);
+    time_init();
     keyboard_init(); fb_print(" PS/2 keyboard driver initialized\n", COL_SUCCESS_INIT);
     // stopwatch_init();
 

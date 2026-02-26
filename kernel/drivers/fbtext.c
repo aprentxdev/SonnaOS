@@ -88,6 +88,20 @@ void fb_put_char(uint32_t codepoint, uint32_t color)
         overwrite_pos = LEFT_MARGIN;
         return;
     }
+    if(codepoint == '\b') {
+        if (g_cursor_x > LEFT_MARGIN) {
+            g_cursor_x -= g_font->width;
+            fb_clear_area(g_cursor_x, g_cursor_y, g_font->width, g_font->height, 0x00000000);
+
+            overwrite = false;
+        }
+        else if (g_cursor_y > 15) {
+            g_cursor_y -= g_font->line_height;
+            g_cursor_x = g_fb->width - g_font->width;
+            fb_clear_area(g_cursor_x, g_cursor_y, g_font->width, g_font->height, 0x00000000);
+        }
+        return;
+    }
 
     if (g_cursor_x + g_font->width > g_fb->width) {
         fb_newline();

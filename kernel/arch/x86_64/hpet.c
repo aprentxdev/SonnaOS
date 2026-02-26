@@ -39,9 +39,5 @@ void hpet_init(void *rsdp_ptr) {
 
     hpet_write(HPET_CONFIG, hpet_read(HPET_CONFIG) | HPET_CFG_ENABLE);
 
-    serial_puts("HPET initialized at freq: ");
-    char buf[32];
-    u64_to_dec(hpet_frequency_hz, buf);
-    serial_puts(buf);
-    serial_puts(" Hz\n");
+    serial_puts("HPET initialized\n");
 }

@@ -17,7 +17,6 @@
 #include <mm/pmm.h>
 #include <mm/vmm.h>
 #include <colors.h>
-#include <stopwatch.h>
 #include <kernelshell.h>
 
 #define ESTELLA_VERSION "v0.Estella.8.0-pre"
@@ -270,7 +269,7 @@ void EstellaEntry(void) {
     idt_init(); fb_print(" IDT initialized;", COL_SUCCESS_INIT);
     pmm_init(); fb_print("  PMM initialized;", COL_SUCCESS_INIT); 
     vmm_init(); fb_print("  VMM initialized;", COL_SUCCESS_INIT); 
-    apic_init(); fb_print("  APIC initialized;", COL_SUCCESS_INIT);
+    apic_init(); fb_print("  TSC & APIC initialized;", COL_SUCCESS_INIT);
     keyboard_init(); fb_print(" PS/2 keyboard driver initialized\n", COL_SUCCESS_INIT);
     // stopwatch_init();
 

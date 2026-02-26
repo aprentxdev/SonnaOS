@@ -4,7 +4,6 @@
 #include <drivers/keyboard.h>
 #include <drivers/serial.h>
 #include <arch/x86_64/apic.h>
-#include <stopwatch.h>
 #include <colors.h>
 
 #define INPUT_BUFFER_SIZE 128
@@ -83,9 +82,6 @@ void launch_shell(void) {
                 handle_input_char(c);
             }
         }
-
-        uint64_t now = timer_get_tsc();
-        stopwatch_update(now, tsc_frequency_hz);
 
         asm volatile("pause");
     }

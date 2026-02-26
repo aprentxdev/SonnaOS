@@ -18,8 +18,9 @@
 #include <mm/vmm.h>
 #include <colors.h>
 #include <stopwatch.h>
+#include <kernelshell.h>
 
-#define ESTELLA_VERSION "v0.Estella.7.0"
+#define ESTELLA_VERSION "v0.Estella.8.0-pre"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -271,7 +272,7 @@ void EstellaEntry(void) {
     vmm_init(); fb_print("  VMM initialized;", COL_SUCCESS_INIT); 
     apic_init(); fb_print("  APIC initialized;", COL_SUCCESS_INIT);
     keyboard_init(); fb_print(" PS/2 keyboard driver initialized\n", COL_SUCCESS_INIT);
-    stopwatch_init();
+    // stopwatch_init();
 
     run_pmm_tests(); run_vmm_tests();
     fb_print("\n", 0); print_system_info(fb);
@@ -280,45 +281,7 @@ void EstellaEntry(void) {
     // Enabling interrupts
     asm volatile("sti");
 
-    fb_print("Controls:\n", COL_INFO);
-    fb_print("t : Start / Pause stopwatch\n", COL_INFO);
-    fb_print("q : Trigger kernel panic (from #UD)\n", COL_INFO);
-    fb_print("\n", 0);
-
-    serial_puts("Controls: t = toggle stopwatch, q = trigger panic\n");
-
-    while (1)
-    {
-        if (keyboard_has_data())
-        {
-            char ch = keyboard_get_char();
-
-            if (ch != 0)
-            {
-                switch (ch)
-                {
-                    case 't':
-                    case 'T':
-                        stopwatch_toggle();
-                        break;
-
-                    case 'q':
-                    case 'Q':
-                        fb_print("\nTriggering test panic...\n", COL_FAIL);
-                        serial_puts("\nTriggering test panic...\n");
-                        asm ("ud2");
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-
-        uint64_t now = timer_get_tsc();
-        stopwatch_update(now, tsc_frequency_hz);
-
-        asm volatile("pause");
-    }
+    launch_shell(); // kernelshell.h
 
     hcf();
 }

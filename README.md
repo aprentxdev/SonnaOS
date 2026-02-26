@@ -16,6 +16,8 @@ Writing an operating system to explore low-level architecture and hardware progr
 ## Current status
 - ✅ UEFI boot via Limine bootloader on x86_64
 - ✅ Long mode + higher-half kernel - by Limine
+- ✅ Serial (COM1) debug output
+- ✅ Framebuffer text console (PSF2 font: Spleen 12x24)
 - ✅ GDT + TSS 
 - ✅ IDT + basic exception handlers - ISRs
 - ✅ ACPI parsing (RSDP, XSDT, MADT, HPET)
@@ -25,11 +27,7 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Physical Memory Manager (PMM) with self-tests
 - ✅ Virtual Memory Manager (VMM) with self-tests
 - ✅ PS/2 keyboard driver
-    - Debug hotkeys: `t` → toggle stopwatch, `q` → test panic
-- ✅ Serial (COM1) debug output
-- ✅ Framebuffer text console (PSF2 font: Spleen 12x24)
-
-kernel shell
+- ✅ Temporarily kernelspace shell
 
 ### Requirements
 - clang + ld.lld

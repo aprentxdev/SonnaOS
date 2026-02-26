@@ -13,5 +13,6 @@ void fb_put_char(uint32_t codepoint, uint32_t color);
 void fb_print(const char *str, uint32_t color);
 void fb_print_at(const char *str, uint32_t color, int x, int y);
 void fb_print_number(uint64_t, uint32_t color);
+void fb_clear(void);
 
 #endif

@@ -61,6 +61,12 @@ static void fb_clear_area(size_t x, size_t y, size_t width, size_t height, uint3
     }
 }
 
+void fb_clear(void) {
+    fb_clear_area(0, 0, g_fb->width, g_fb->height, 0x000000);
+    g_cursor_x = LEFT_MARGIN;
+    g_cursor_y = 15;
+}
+
 void fb_put_char(uint32_t codepoint, uint32_t color)
 {
     if (!g_fb || !g_font || !g_font->glyphs) {

@@ -5,6 +5,7 @@
 #include <drivers/serial.h>
 #include <colors.h>
 #include <generic/time.h>
+#include <generic/usermode.h>
 
 #define INPUT_BUFFER_SIZE 128
 
@@ -24,33 +25,37 @@ static void execute_command(const char* cmd) {
     if (!cmd || cmd[0] == '\0') return;
 
     if (strcmp(cmd, "help") == 0) {
-        fb_print("Available commands: help, clear, about, time, panic, halt\n", COL_INFO);
+        fb_print("Available commands: help, clear, about, time, panic, usermode, halt\n", 0x00FF00);
     }
     else if (strcmp(cmd, "clear") == 0) { 
         fb_clear();
     }
     else if (strcmp(cmd, "about") == 0) {
-        fb_print("Estella kernelspace shell\n", COL_INFO);
-        fb_print("\n", 0);
+        fb_print("Estella shell (Ring 0)\n", 0x00BFFF);
     }
     else if (strcmp(cmd, "time") == 0) {
         char* time = time_get_current();
-        fb_print("time (UTC): ", COL_INFO);
-        fb_print(time, COL_INFO);
+        fb_print("time (UTC): ", 0xFFAA00);
+        fb_print(time, 0xFFFFFF);
         fb_print("\n", 0);
     }
     else if (strcmp(cmd, "panic") == 0) {
-        fb_print("Triggering kernel panic...\n", COL_INFO);
+        fb_print("Triggering kernel panic...\n", 0xFF0000);
         asm volatile("ud2");
     }
     else if (strcmp(cmd, "halt") == 0) {
-        fb_print("Halting system...\n", COL_INFO);
+        fb_print("Halting system...\n", 0x00FFFF);
         asm volatile("cli; hlt");
         while (1) asm("hlt");
     }
+    else if (strcmp(cmd, "usermode") == 0) {
+        fb_print("trying to enter usermode(ring 3).. (should call asm(ud2) - kernel panic vector 6)\n", 0xFFAA00);
+        serial_puts("trying to enter usermode(ring 3).. (should call asm(ud2) - kernel panic vector 6)\n");
+        enter_usermode();
+    }
     else {
-        fb_print("Unknown command: ", COL_INFO);
-        fb_print(cmd, COL_INFO);
+        fb_print("Unknown command: ", 0xAA0000);
+        fb_print(cmd, 0xAAAAAA);
         fb_print("\n", 0);
     }
 }

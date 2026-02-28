@@ -20,7 +20,7 @@
 #include <shell_kspace/kernelshell.h>
 #include <arch/x86_64/time/time.h>
 
-#define ESTELLA_VERSION "v0.Estella.8.0"
+#define ESTELLA_VERSION "Estella v0.9.0-dev"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(4);
@@ -97,7 +97,7 @@ static void print_system_info(struct limine_framebuffer *fb) {
             case LIMINE_FIRMWARE_TYPE_EFI64: fw = "EFI64"; break;
             case LIMINE_FIRMWARE_TYPE_SBI: fw = "SBI"; break;
         }
-        fb_print("   Firmware:   ", COL_LABEL);
+        fb_print("       Firmware:   ", COL_LABEL);
         fb_print(fw, COL_VALUE);
         fb_print("\n", 0);
 

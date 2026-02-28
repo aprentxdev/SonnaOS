@@ -48,4 +48,7 @@ uint64_t vmm_get_physical(uint64_t virt);
 uint64_t vmm_get_flags(uint64_t virt);
 void vmm_dump_pte(uint64_t virt);
 
+bool vmm_map_for_pml4(uint64_t *pml4, uint64_t virt, uint64_t phys, uint64_t flags);
+bool vmm_map_range_for_pml4(uint64_t *pml4, uint64_t virt, uint64_t phys, size_t count, uint64_t flags);
+
 #endif

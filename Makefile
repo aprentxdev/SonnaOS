@@ -46,10 +46,27 @@ TARGET = $(BUILD_DIR)/estella.elf
 
 C_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c')
 ASM_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.S')
-OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES)) 
+
+USER_CODE_SRC = userspace_programs/stackcheck_and_panic.c
+USER_CODE_BIN = $(BUILD_DIR)/user_code.bin
+USER_CODE_OBJ = $(BUILD_DIR)/user_code.o
+USER_CODE_OBJ_TEMP = $(BUILD_DIR)/user_code_temp.o
+USER_CODE_OBJ_TEMP_D = $(BUILD_DIR)/user_code_temp.d
+
+OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
+		   $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES)) \
+		   $(USER_CODE_OBJ)
 DEPENDS := $(OBJECTS:.o=.d)
 
 all: limine spleen $(TARGET)
+
+$(USER_CODE_BIN): $(USER_CODE_SRC)
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) -ffreestanding -fno-pie -c $< -o $(USER_CODE_OBJ_TEMP)
+	ld -Ttext=0x0 --oformat=binary -o $@ $(USER_CODE_OBJ_TEMP)
+
+$(USER_CODE_OBJ): $(USER_CODE_BIN)
+	objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
 
 limine:
 	if [ ! -d "$(LIMINE_DIR)" ]; then \

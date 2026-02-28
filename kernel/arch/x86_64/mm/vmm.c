@@ -24,7 +24,7 @@ static inline void invlpg(uint64_t addr) {
     asm volatile("invlpg (%0)" ::"r"(addr) : "memory");
 }
 
-static uint64_t kernel_pml4_phys = 0;
+uint64_t kernel_pml4_phys = 0;
 
 static uint64_t *get_pml4e(uint64_t *pml4, uint64_t virt) {
     return &pml4[PML4_INDEX(virt)];
@@ -176,7 +176,7 @@ uint64_t vmm_get_flags(uint64_t virt) {
     uint64_t *pml4 = (uint64_t *)phys_to_virt(kernel_pml4_phys);
     uint64_t *pte = get_pte(pml4, virt);
     if (!pte) return 0;
-    return *pte & ~0xFFFULL;
+    return *pte & 0xFFFULL;
 }
 
 void vmm_dump_pte(uint64_t virt) {
@@ -194,4 +194,48 @@ void vmm_init(void) {
     asm volatile("mov %%cr3, %0" : "=r"(cr3));
     kernel_pml4_phys = cr3 & ~0xFFFULL;
     serial_puts("VMM initialized\n");
+}
+
+bool vmm_map_for_pml4(uint64_t *pml4, uint64_t virt, uint64_t phys, uint64_t flags) {
+    if (virt & 0xFFF || phys & 0xFFF) return false;
+
+    uint64_t *pml4e = &pml4[PML4_INDEX(virt)];
+    if (!(*pml4e & PTE_PRESENT)) {
+        void *pdpt = pmm_alloc_zeroed();
+        if (!pdpt) return false;
+        *pml4e = (uint64_t)pdpt | PTE_PRESENT | PTE_WRITE | PTE_USER;
+    }
+
+    uint64_t *pdpt = (uint64_t *)phys_to_virt(*pml4e & ~0xFFFULL);
+    uint64_t *pdpe = &pdpt[PDP_INDEX(virt)];
+    if (!(*pdpe & PTE_PRESENT)) {
+        void *pd = pmm_alloc_zeroed();
+        if (!pd) return false;
+        *pdpe = (uint64_t)pd | PTE_PRESENT | PTE_WRITE | PTE_USER;
+    }
+
+    uint64_t *pd = (uint64_t *)phys_to_virt(*pdpe & ~0xFFFULL);
+    uint64_t *pde = &pd[PD_INDEX(virt)];
+    if (!(*pde & PTE_PRESENT)) {
+        void *pt = pmm_alloc_zeroed();
+        if (!pt) return false;
+        *pde = (uint64_t)pt | PTE_PRESENT | PTE_WRITE | PTE_USER;
+    }
+
+    uint64_t *pt = (uint64_t *)phys_to_virt(*pde & ~0xFFFULL);
+    uint64_t *pte = &pt[PT_INDEX(virt)];
+    if (*pte & PTE_PRESENT) return false;
+
+    *pte = phys | (flags & ~PTE_PRESENT) | PTE_PRESENT;
+    *pte &= ~(1ULL << 63);
+
+    invlpg(virt);
+    return true;
+}
+
+bool vmm_map_range_for_pml4(uint64_t *pml4, uint64_t virt, uint64_t phys, size_t count, uint64_t flags) {
+    for (size_t i = 0; i < count; i++)
+        if (!vmm_map_for_pml4(pml4, virt + i*PAGE_SIZE, phys + i*PAGE_SIZE, flags))
+            return false;
+    return true;
 }

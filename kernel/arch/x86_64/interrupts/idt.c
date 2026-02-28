@@ -27,7 +27,11 @@ void exception_handler(uint64_t vector, uint64_t error_code, uint64_t rip, uint6
 
     fb_print("Vector : ", 0xAAAAAA);
     fb_print_number(vector, 0xAAAAAA);
+    serial_puts("Vector : ");
+    u64_to_dec(vector, buf);
+    serial_puts(buf);
     fb_print("   ", 0xAAAAAA);
+    serial_puts("   ");
     if (vector < 32) {
         fb_print("(exception)", 0xAAAAAA);
         serial_puts("(exception)");

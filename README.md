@@ -28,8 +28,9 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Virtual Memory Manager (VMM) with self-tests
 - ✅ PS/2 keyboard driver
 - ✅ Temporarily kernelspace shell
-- ✅ Basic usermode support (iretq transition with isolated page tables)
-- ✅ Embedded usermode test program (stack check + panic via ud2)
+- ✅ usermode support (iretq transition with isolated page tables)
+- ✅ syscalls: write (1), exit(60)
+- ✅ Embedded usermode test program (write "hello from userpace" + exit with code 42)
 
 ### Requirements
 - clang + ld.lld

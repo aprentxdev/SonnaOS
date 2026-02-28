@@ -49,8 +49,8 @@ static void execute_command(const char* cmd) {
         while (1) asm("hlt");
     }
     else if (strcmp(cmd, "usermode") == 0) {
-        fb_print("trying to enter usermode(ring 3).. (should call asm(ud2) - kernel panic vector 6)\n", 0xFFAA00);
-        serial_puts("trying to enter usermode(ring 3).. (should call asm(ud2) - kernel panic vector 6)\n");
+        fb_print("Entering usermode - ring 3..\n", 0xFFAA00);
+        serial_puts("Entering usermode - ring 3..\n");
         enter_usermode();
     }
     else {

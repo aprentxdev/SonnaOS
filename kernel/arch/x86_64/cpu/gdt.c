@@ -5,6 +5,7 @@
 
 static struct gdt_entry gdt[GDT_ENTRIES] __attribute__((aligned(16))) = {0};
 static struct gdt_ptr gp;
+struct tss_struct tss;
 
 #define IST_STACK_SIZE 8192
 static uint8_t ist1_stack[IST_STACK_SIZE] __attribute__((aligned(16)));

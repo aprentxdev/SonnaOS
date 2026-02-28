@@ -47,11 +47,11 @@ TARGET = $(BUILD_DIR)/estella.elf
 C_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c')
 ASM_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.S')
 
-USER_CODE_SRC = userspace_programs/stackcheck_and_panic.c
+USER_CODE_SRC = userspace/programs/write_and_exit.c
 USER_CODE_BIN = $(BUILD_DIR)/user_code.bin
 USER_CODE_OBJ = $(BUILD_DIR)/user_code.o
 USER_CODE_OBJ_TEMP = $(BUILD_DIR)/user_code_temp.o
-USER_CODE_OBJ_TEMP_D = $(BUILD_DIR)/user_code_temp.d
+
 
 OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
 		   $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES)) \

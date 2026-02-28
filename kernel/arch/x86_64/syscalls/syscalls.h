@@ -1,0 +1,6 @@
+#ifndef ESTELLA_ARCH_X86_64_SYSCALLS_SYSCALLS_H
+#define ESTELLA_ARCH_X86_64_SYSCALLS_SYSCALLS_H
+
+void syscalls_init(void);
+
+#endif

@@ -28,7 +28,7 @@ struct gdt_system_entry { // 16 byte tss/ldt descriptor
     uint32_t reserved;
 } __attribute__((packed));
 
-static struct {
+struct tss_struct {
     uint32_t reserved0;
     uint64_t rsp0;
     uint64_t rsp1;
@@ -44,7 +44,7 @@ static struct {
     uint64_t reserved2;
     uint16_t reserved3;
     uint16_t iomap_base;
-} __attribute__((packed)) tss = {0};
+} __attribute__((packed));
 
 void gdt_init(void);
 

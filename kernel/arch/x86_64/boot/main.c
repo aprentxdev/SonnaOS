@@ -19,6 +19,7 @@
 #include <colors.h>
 #include <shell_kspace/kernelshell.h>
 #include <arch/x86_64/time/time.h>
+#include <arch/x86_64/syscalls/syscalls.h>
 
 #define ESTELLA_VERSION "Estella v0.9.0-dev"
 
@@ -274,9 +275,10 @@ void EstellaEntry(void) {
     // init everything
     gdt_init(); fb_print("GDT with TSS initialized;", COL_SUCCESS_INIT);
     idt_init(); fb_print(" IDT initialized;", COL_SUCCESS_INIT);
-    pmm_init(); fb_print("  PMM initialized;", COL_SUCCESS_INIT); 
-    vmm_init(); fb_print("  VMM initialized;", COL_SUCCESS_INIT); 
-    apic_init(); fb_print("  TSC & APIC initialized;", COL_SUCCESS_INIT);
+    syscalls_init(); fb_print(" syscalls initialized;", COL_SUCCESS_INIT);
+    pmm_init(); fb_print(" PMM initialized;", COL_SUCCESS_INIT); 
+    vmm_init(); fb_print(" VMM initialized;", COL_SUCCESS_INIT); 
+    apic_init(); fb_print(" TSC & APIC initialized;", COL_SUCCESS_INIT);
     time_init();
     keyboard_init(); fb_print(" PS/2 keyboard driver initialized\n", COL_SUCCESS_INIT);
     // stopwatch_init();
@@ -289,6 +291,5 @@ void EstellaEntry(void) {
     asm volatile("sti");
 
     launch_shell(); // kernelshell.h
-
     hcf();
 }

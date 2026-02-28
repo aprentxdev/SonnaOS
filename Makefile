@@ -4,7 +4,7 @@ LD = ld.lld
 CFLAGS = -target x86_64-unknown-elf \
          -ffreestanding -fno-pic -fno-pie -mno-red-zone \
          -fno-stack-protector -fshort-wchar -Wall -O2 \
-		 -Ikernel \
+		 -I kernel -I kernel/include \
 		 -MMD -MP -mcmodel=kernel -fno-omit-frame-pointer \
 		 -mno-sse
 LDFLAGS = -T x86-64.lds -nostdlib

@@ -1,7 +1,7 @@
 #include <drivers/keyboard.h>
-#include <arch/x86_64/apic.h>
-#include <arch/x86_64/io.h>
 #include <drivers/serial.h>
+#include <generic/irq.h>
+#include <generic/io.h>
 
 static const char ascii_base[128] = {
     0,   0,   '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
@@ -90,18 +90,18 @@ void keyboard_handler(void) {
         }
     }
 
-    lapic_eoi();
+    irq_eoi();
 }
 
 extern void keyboard_isr(void);
 
 void keyboard_init(void) {
-    ioapic_set_irq(
+    irq_set(
         1,
         0x21,
         false,
         false,
-        IOREDTBL_DELMODE_FIXED,
+        IRQ_DELMODE_FIXED,
         0
     );
     serial_puts("PS/2 keyboard driver initialized\n");

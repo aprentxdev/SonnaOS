@@ -35,6 +35,9 @@ BUILD_DIR = build
 SRC_DIR = kernel
 ESP_DIR = $(BUILD_DIR)/ESP
 
+DISK_IMG = $(BUILD_DIR)/SonnaOS-estella.img
+IMG_SIZE_MB ?= 64
+
 SPLEEN_URL ?= https://github.com/fcambus/spleen/releases/download/2.2.0/spleen-2.2.0.tar.gz
 SPLEEN_TAR ?= spleen-2.2.0.tar.gz
 SPLEEN_DIR ?= spleen
@@ -87,10 +90,18 @@ esp: limine spleen $(TARGET) limine.conf
 	cp limine.conf $(ESP_DIR)/boot/limine/limine.conf
 	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/$(SPLEEN_DIR)/
 
-run: esp
+$(DISK_IMG): esp
+	rm -f $@
+	dd if=/dev/zero of=$@ bs=1M count=$(IMG_SIZE_MB)
+	mkfs.fat -F 32 $@
+	mcopy -s -i $@ $(ESP_DIR)/* ::/
+
+img: $(DISK_IMG)
+
+run: img esp
 	$(QEMU) $(QEMU_FLAGS) \
 		-drive if=pflash,format=raw,unit=0,file=$(OVMF_CODE),readonly=on \
-		-drive format=raw,file=fat:rw:$(ESP_DIR)
+		-drive format=raw,file=$(DISK_IMG)
 
 clean:
 	rm -rf $(BUILD_DIR) 

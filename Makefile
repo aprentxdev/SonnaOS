@@ -1,13 +1,22 @@
 CC = clang
 LD = ld.lld
 
-CFLAGS = -target x86_64-unknown-elf \
+KERNEL_CFLAGS = -target x86_64-unknown-elf \
          -ffreestanding -fno-pic -fno-pie -mno-red-zone \
          -fno-stack-protector -fshort-wchar -Wall -O2 \
 		 -I kernel -I kernel/include \
 		 -MMD -MP -mcmodel=kernel -fno-omit-frame-pointer \
 		 -mno-sse
-LDFLAGS = -T x86-64.lds -nostdlib
+KERNEL_LDFLAGS = -T x86-64.lds -nostdlib
+
+USER_CFLAGS = -target x86_64-unknown-elf \
+    -ffreestanding -fno-pic -fno-pie -mno-red-zone \
+    -fno-stack-protector -fshort-wchar -Wall -O2 \
+    -I userspace/include \
+    -nostdlib -static -fno-omit-frame-pointer \
+    -mno-sse -fno-asynchronous-unwind-tables
+
+USER_LDFLAGS = -static -no-pie -nostdlib -T userspace/user.ld
 
 LIMINE_DIR ?= ./limine
 QEMU ?= qemu-system-x86_64
@@ -46,27 +55,42 @@ TARGET = $(BUILD_DIR)/estella.elf
 
 C_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.c')
 ASM_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.S')
+KERNEL_OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
+                  $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES))
+KERNEL_DEPENDS := $(KERNEL_OBJECTS:.o=.d)
 
-USER_CODE_SRC = userspace/programs/write_and_exit.c
-USER_CODE_BIN = $(BUILD_DIR)/user_code.bin
-USER_CODE_OBJ = $(BUILD_DIR)/user_code.o
-USER_CODE_OBJ_TEMP = $(BUILD_DIR)/user_code_temp.o
+USER_PROGRAMS := write_and_exit
+USER_LIB_SRC := userspace/lib/syscalls.c
+USER_LIB_OBJ := $(BUILD_DIR)/userspace/lib/syscalls.o
 
+USER_PROG_OBJS := $(addprefix $(BUILD_DIR)/userspace/programs/,$(addsuffix .o,$(USER_PROGRAMS)))
+USER_ELFS := $(addprefix $(BUILD_DIR)/,$(addsuffix .elf,$(USER_PROGRAMS)))
 
-OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
-		   $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES)) \
-		   $(USER_CODE_OBJ)
-DEPENDS := $(OBJECTS:.o=.d)
+all: limine spleen $(TARGET) userspace
 
-all: limine spleen $(TARGET)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	mkdir -p $(@D)
+	$(CC) $(KERNEL_CFLAGS) -c $< -o $@
 
-$(USER_CODE_BIN): $(USER_CODE_SRC)
-	mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) -ffreestanding -fno-pie -c $< -o $(USER_CODE_OBJ_TEMP)
-	ld -Ttext=0x0 --oformat=binary -o $@ $(USER_CODE_OBJ_TEMP)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
+	mkdir -p $(@D)
+	$(CC) $(KERNEL_CFLAGS) -c $< -o $@
 
-$(USER_CODE_OBJ): $(USER_CODE_BIN)
-	objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
+$(TARGET): $(KERNEL_OBJECTS) x86-64.lds
+	$(LD) $(KERNEL_LDFLAGS) -o $@ $(KERNEL_OBJECTS)
+
+$(USER_LIB_OBJ): $(USER_LIB_SRC)
+	mkdir -p $(@D)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/userspace/programs/%.o: userspace/programs/%.c
+	mkdir -p $(@D)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.elf: $(BUILD_DIR)/userspace/programs/%.o $(USER_LIB_OBJ)
+	$(LD) $(USER_LDFLAGS) -o $@ $^
+
+userspace: $(USER_ELFS)
 
 limine:
 	if [ ! -d "$(LIMINE_DIR)" ]; then \
@@ -89,23 +113,13 @@ spleen:
 		--wildcards '*.psfu' || true
 	rm -f $(SPLEEN_TAR)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
-	mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(TARGET): $(OBJECTS) x86-64.lds
-	$(LD) $(LDFLAGS) -o $@ $(OBJECTS)
-
-esp: limine spleen $(TARGET) limine.conf
+esp: limine spleen $(TARGET) userspace limine.conf
 	mkdir -p $(ESP_DIR)/EFI/BOOT $(ESP_DIR)/boot/limine $(ESP_DIR)/boot/spleen
 	cp $(LIMINE_DIR)/BOOTX64.EFI $(ESP_DIR)/EFI/BOOT/BOOTX64.EFI
 	cp $(TARGET) $(ESP_DIR)/boot/estella.elf
 	cp limine.conf $(ESP_DIR)/boot/limine/limine.conf
-	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/$(SPLEEN_DIR)/
+	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/spleen/
+	cp $(BUILD_DIR)/write_and_exit.elf $(ESP_DIR)/boot/user.elf
 
 $(DISK_IMG): esp
 	rm -f $@
@@ -129,6 +143,6 @@ distclean: clean
 compdb:
 	bear -- make clean all
 
-.PHONY: all esp run clean distclean
+.PHONY: all userspace esp img run clean distclean compdb
 
 -include $(DEPENDS)

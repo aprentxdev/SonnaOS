@@ -28,9 +28,22 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Virtual Memory Manager (VMM) with self-tests
 - ✅ PS/2 keyboard driver
 - ✅ Temporarily kernelspace shell
-- ✅ usermode support (iretq transition with isolated page tables)
-- ✅ syscalls: write (1), exit(60)
-- ✅ Embedded usermode test program (write "hello from userpace" + exit with code 42)
+- ✅ Current UTC time with (boot_time via limine) + (tsc(time after boot))
+- ✅ Usermode support (iretq transition with isolated page tables)
+- ✅ Elf loader (elf from limine module)
+- ✅ Syscalls: write (1), exit(60)
+- ✅ Userspace program: write_and_exit.c:
+```c
+#include "syscalls.h"
+
+void user_main(void)
+{
+    const char msg[] = "Hello from userspace!\n";
+    write(1, msg, sizeof(msg)-1);
+    
+    _exit(42);
+}
+```
 
 ### Requirements
 - clang + ld.lld

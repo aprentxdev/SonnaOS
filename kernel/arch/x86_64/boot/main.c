@@ -20,6 +20,7 @@
 #include <shell_kspace/kernelshell.h>
 #include <arch/x86_64/time/time.h>
 #include <arch/x86_64/syscalls/syscalls.h>
+#include <arch/x86_64/usermode/usermode.h>
 
 #define ESTELLA_VERSION "Estella v0.9.0-dev"
 
@@ -241,6 +242,8 @@ void run_vmm_tests(void) {
     serial_puts("VMM tests OK\n");
 }
 
+struct limine_file *user_module;
+
 void EstellaEntry(void) {
     // asm volatile("sti");
     // https://codeberg.org/Limine/limine-protocol/src/branch/trunk/PROTOCOL.md#x86-64-1
@@ -290,6 +293,10 @@ void EstellaEntry(void) {
     // Enabling interrupts
     asm volatile("sti");
 
+
+    user_module = module_request.response->modules[1];
     launch_shell(); // kernelshell.h
+    // fb_print("Running elf...\n", COL_INFO);
+    // enter_usermode(user_module->address, user_module->size);
     hcf();
 }

@@ -4,6 +4,7 @@
 #include <klib/memory.h>
 #include <stdint.h>
 #include <arch/x86_64/cpu/msr.h>
+#include <drivers/keyboard.h>
 
 extern void syscall_handler(void);
 
@@ -36,6 +37,7 @@ void syscalls_init(void)
     serial_puts("syscalls enabled\n");
 }
 
+#define SYS_READ  0
 #define SYS_WRITE 1
 #define SYS_EXIT 60
 
@@ -64,18 +66,68 @@ uint64_t syscall_common_handler(syscall_context_t *ctx) {
             return -1;
         }
 
+        case SYS_READ:
+        {
+            uint64_t fd = ctx->rdi;
+            char *user_buf = (char *)ctx->rsi;
+            uint64_t count = ctx->rdx;
+
+            if (fd != 0 || count == 0) {
+                return -1;
+            }
+
+            static char line_buffer[256];
+            static int line_pos = 0;
+            
+            while (1) {
+                while (!keyboard_has_data()) {
+                    asm("pause");
+                }
+                
+                char c = keyboard_get_char();
+                
+                if (c == '\n') {
+                    int copy_size = (line_pos < count) ? line_pos : count;
+                    for (int i = 0; i < copy_size; i++) {
+                        user_buf[i] = line_buffer[i];
+                    }
+                    
+                    line_pos = 0;
+                    
+                    fb_put_char('\n', 0xFFFFFF);
+                    return copy_size;
+                }
+                else if (c == '\b' || c == 127) {
+                    if (line_pos > 0) {
+                        line_pos--;
+                        fb_put_char('\b', 0xFFFFFF);
+                    }
+                }
+                else if (c >= 32 && c <= 126) {
+                    if (line_pos < sizeof(line_buffer) - 1) {
+                        line_buffer[line_pos++] = c;
+                        fb_put_char(c, 0xFFFFFF);
+                    }
+                }
+            }
+        }
+
         case SYS_EXIT:
+        {
             fb_print("\nUser program exited with code ", 0xAAAAAA);
             u64_to_dec(ctx->rdi, buf);
             fb_print(buf, 0xAAAAAA);
             fb_print("\n", 0xAAAAAA);
             while (1) asm volatile ("hlt");
+        }
 
         default:
+        {
             fb_print("unhandled syscall #", 0xAAAAAA);
             u64_to_dec(ctx->rax, buf);
             fb_print(buf, 0xAAAAAA);
             fb_print("\n", 0x000000);
             return -1;
+        }
     }
 }

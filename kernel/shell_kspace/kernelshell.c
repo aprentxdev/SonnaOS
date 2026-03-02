@@ -1,25 +1,9 @@
 #include <klib/string.h>
-#include <klib/memory.h>
 #include <drivers/fbtext.h>
 #include <drivers/keyboard.h>
-#include <drivers/serial.h>
 #include <colors.h>
 #include <generic/time.h>
 #include <generic/usermode.h>
-
-#define INPUT_BUFFER_SIZE 128
-
-static char input_buffer[INPUT_BUFFER_SIZE];
-static int input_index = 0;
-
-static void print_prompt(void) {
-    fb_print("sh> ", 0x7FFFD4);
-}
-
-static void clear_input_buffer(void) {
-    memset(input_buffer, 0, INPUT_BUFFER_SIZE);
-    input_index = 0;
-}
 
 static void execute_command(const char* cmd) {
     if (!cmd || cmd[0] == '\0') return;
@@ -60,44 +44,37 @@ static void execute_command(const char* cmd) {
     }
 }
 
-static void handle_input_char(char c) {
-    if (c == '\n') {
-        input_buffer[input_index] = '\0';
-        fb_print("\n", 0);
-        execute_command(input_buffer);
-        clear_input_buffer();
-        print_prompt();
-    }
-    else if (c == '\b') {
-        if (input_index > 0) {
-            input_index--;
-            input_buffer[input_index] = 0;
-            fb_print("\b", 0xFFFFFF);
-        }
-    }
-    else if (c >= 32 && c <= 126) {
-        if (input_index < INPUT_BUFFER_SIZE - 1) {
-            input_buffer[input_index++] = c;
-            char str[2] = {c, 0};
-            fb_print(str, 0xFFFFFF);
-        }
-    }
-}
-
 void launch_shell(void) {
-    clear_input_buffer();
+    char cmd_buffer[256];
+    unsigned int cmd_pos = 0;
+
     fb_print("Welcome to Estella kernel shell \n", COL_SUCCESS_INIT);
     fb_print("Type 'help' for commands.\n\n", COL_SUCCESS_INIT);
+    
+    fb_print("sh> ", 0x7FFFD4);
 
-    print_prompt();
     while (1) {
         if (keyboard_has_data()) {
             char c = keyboard_get_char();
-            if (c) {
-                handle_input_char(c);
+            if (c == '\n') {
+                cmd_buffer[cmd_pos] = '\0';
+                fb_put_char('\n', 0xAAAAAA);
+                execute_command(cmd_buffer);
+                cmd_pos = 0;
+                fb_print("sh> ", 0x7FFFD4);
+            }
+            else if (c == '\b') {
+                if (cmd_pos > 0) {
+                    cmd_pos--;
+                    fb_put_char('\b', 0xAAAAAA);
+                }
+            }
+            else if (c >= ' ' && c <= '~') {
+                if (cmd_pos < sizeof(cmd_buffer) - 1) {
+                    cmd_buffer[cmd_pos++] = c;
+                    fb_put_char(c, 0xAAAAAA);
+                }
             }
         }
-
-        asm volatile("pause");
     }
 }

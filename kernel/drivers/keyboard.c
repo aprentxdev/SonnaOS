@@ -2,6 +2,35 @@
 #include <drivers/serial.h>
 #include <generic/irq.h>
 #include <generic/io.h>
+#include <drivers/fbtext.h>
+
+#define KBD_BUFFER_SIZE 128
+
+static char kbd_buffer[KBD_BUFFER_SIZE];
+static volatile unsigned int kbd_head = 0;
+static volatile unsigned int kbd_tail = 0;
+
+static inline bool kbd_buffer_empty(void) {
+    return kbd_head == kbd_tail;
+}
+
+static inline bool kbd_buffer_full(void) {
+    return ((kbd_head + 1) % KBD_BUFFER_SIZE) == kbd_tail;
+}
+
+static void kbd_buffer_push(char c) {
+    if (!kbd_buffer_full()) {
+        kbd_buffer[kbd_head] = c;
+        kbd_head = (kbd_head + 1) % KBD_BUFFER_SIZE;
+    }
+}
+
+static char kbd_buffer_pop(void) {
+    if (kbd_buffer_empty()) return 0;
+    char c = kbd_buffer[kbd_tail];
+    kbd_tail = (kbd_tail + 1) % KBD_BUFFER_SIZE;
+    return c;
+}
 
 static const char ascii_base[128] = {
     0,   0,   '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
@@ -25,11 +54,9 @@ static const char ascii_shift[128] = {
     0,   0,   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
 };
 
-static volatile bool     key_pressed    = false;
-static volatile uint8_t  last_scancode  = 0;
-static volatile bool     left_shift     = false;
-static volatile bool     right_shift    = false;
-static volatile bool     caps_lock      = false;
+static volatile bool left_shift = false;
+static volatile bool right_shift = false;
+static volatile bool caps_lock = false;
 
 static inline bool is_shift_pressed(void) {
     return left_shift || right_shift;
@@ -56,37 +83,19 @@ static char get_char_from_scancode(uint8_t code) {
 
 void keyboard_handler(void) {
     uint8_t scancode = inb(0x60);
-
     bool is_break = (scancode & 0x80) != 0;
     uint8_t code = scancode & 0x7F;
 
     if (is_break) {
-        switch (code) {
-            case 0x2A:
-                left_shift = false;
-                break;
-            case 0x36:
-                right_shift = false;
-                break;
-        }
-    }
-    else {
-        switch (code) {
-            case 0x2A:
-                left_shift = true;
-                break;
-            case 0x36:
-                right_shift = true;
-                break;
-
-            case 0x3A:
-                caps_lock = !caps_lock;
-                break;
-
-            default:
-                last_scancode = scancode;
-                key_pressed = true;
-                break;
+        if (code == 0x2A) left_shift = false;
+        if (code == 0x36) right_shift = false;
+    } else {
+        if (code == 0x2A) left_shift = true;
+        else if (code == 0x36) right_shift = true;
+        else if (code == 0x3A) caps_lock = !caps_lock;
+        else {
+            char ch = get_char_from_scancode(code);
+            kbd_buffer_push(ch);
         }
     }
 
@@ -108,31 +117,9 @@ void keyboard_init(void) {
 }
 
 bool keyboard_has_data(void) {
-    return key_pressed;
-}
-
-uint8_t keyboard_get_scancode(void) {
-    key_pressed = false;
-    return last_scancode;
+    return !kbd_buffer_empty();
 }
 
 char keyboard_get_char(void) {
-    if (!key_pressed) {
-        return 0;
-    }
-
-    uint8_t sc = last_scancode;
-    bool is_make = (sc < 0x80);
-
-    if (!is_make) {
-        key_pressed = false;
-        return 0;
-    }
-
-    uint8_t code = sc & 0x7F;
-    char ch = get_char_from_scancode(code);
-
-    key_pressed = false;
-
-    return ch;
+    return kbd_buffer_pop();
 }

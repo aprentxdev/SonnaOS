@@ -4,6 +4,7 @@
 #include <syscalls.h>
 #include <numfmt.h>
 #include <string.h>
+#include <printf.h>
 
 void printf(const char *fmt, ...) {
     va_list args;

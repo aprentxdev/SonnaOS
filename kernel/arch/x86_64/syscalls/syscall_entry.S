@@ -29,7 +29,7 @@ syscall_handler:
     mov     %rsp, %rdi
     call    syscall_common_handler
 
-    pop     %rax
+    add     $8, %rsp
     pop     %rbx
     pop     %rbp
     pop     %rdi

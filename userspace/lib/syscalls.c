@@ -29,6 +29,11 @@ long write(int fd, const void *buf, unsigned long count)
     return syscall3(SYS_WRITE, fd, (long)buf, count);
 }
 
+long read(int fd, void *buf, unsigned long count)
+{
+    return syscall3(SYS_READ, fd, (long)buf, count);
+}
+
 void _exit(int status)
 {
     syscall1(SYS_EXIT, status);

@@ -107,9 +107,7 @@ common:
 .global lapic_timer_isr
 lapic_timer_isr:
     PUSH_REGS
-
     call lapic_timer_handler
-
     POP_REGS
     iretq
 

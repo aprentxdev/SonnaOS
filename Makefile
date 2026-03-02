@@ -59,9 +59,10 @@ KERNEL_OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
                   $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES))
 KERNEL_DEPENDS := $(KERNEL_OBJECTS:.o=.d)
 
-USER_PROGRAMS := write_and_exit
-USER_LIB_SRC := userspace/lib/syscalls.c
-USER_LIB_OBJ := $(BUILD_DIR)/userspace/lib/syscalls.o
+USER_PROGRAMS := printf_return
+USER_LIB_SRC := $(shell find userspace/lib -name '*.c')
+USER_LIB_OBJ := $(patsubst userspace/lib/%.c,$(BUILD_DIR)/userspace/lib/%.o,$(USER_LIB_SRC))
+USER_CRT0_OBJ := $(BUILD_DIR)/userspace/crt0.o
 
 USER_PROG_OBJS := $(addprefix $(BUILD_DIR)/userspace/programs/,$(addsuffix .o,$(USER_PROGRAMS)))
 USER_ELFS := $(addprefix $(BUILD_DIR)/,$(addsuffix .elf,$(USER_PROGRAMS)))
@@ -79,7 +80,11 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
 $(TARGET): $(KERNEL_OBJECTS) x86-64.lds
 	$(LD) $(KERNEL_LDFLAGS) -o $@ $(KERNEL_OBJECTS)
 
-$(USER_LIB_OBJ): $(USER_LIB_SRC)
+$(BUILD_DIR)/userspace/crt0.o: userspace/crt0.S
+	mkdir -p $(@D)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/userspace/lib/%.o: userspace/lib/%.c
 	mkdir -p $(@D)
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
@@ -87,7 +92,7 @@ $(BUILD_DIR)/userspace/programs/%.o: userspace/programs/%.c
 	mkdir -p $(@D)
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.elf: $(BUILD_DIR)/userspace/programs/%.o $(USER_LIB_OBJ)
+$(BUILD_DIR)/%.elf: $(USER_CRT0_OBJ) $(BUILD_DIR)/userspace/programs/%.o $(USER_LIB_OBJ)
 	$(LD) $(USER_LDFLAGS) -o $@ $^
 
 userspace: $(USER_ELFS)
@@ -119,7 +124,7 @@ esp: limine spleen $(TARGET) userspace limine.conf
 	cp $(TARGET) $(ESP_DIR)/boot/estella.elf
 	cp limine.conf $(ESP_DIR)/boot/limine/limine.conf
 	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/spleen/
-	cp $(BUILD_DIR)/write_and_exit.elf $(ESP_DIR)/boot/user.elf
+	cp $(BUILD_DIR)/printf_return.elf $(ESP_DIR)/boot/user.elf
 
 $(DISK_IMG): esp
 	rm -f $@

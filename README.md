@@ -31,17 +31,19 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Current UTC time with (boot_time via limine) + (tsc(time after boot))
 - ✅ Usermode support (iretq transition with isolated page tables)
 - ✅ Elf loader (elf from limine module)
-- ✅ Syscalls: write (1), exit(60)
-- ✅ Userspace program: write_and_exit.c:
+- 🚧 Syscalls: write (1), exit(60)
+- 🚧 Userspace lib: crt0, printf
+- ✅ Userspace program: printf_return.c:
 ```c
-#include "syscalls.h"
+#include <printf.h>
+#include <syscalls.h>
 
-void user_main(void)
+int main(void)
 {
-    const char msg[] = "Hello from userspace!\n";
-    write(1, msg, sizeof(msg)-1);
+    printf("Hello userspace!\n");
+    printf("Dec: %d, Hex: %x, String: %s\n", 42, 0xABCD, "test");
     
-    _exit(42);
+    return 42;
 }
 ```
 

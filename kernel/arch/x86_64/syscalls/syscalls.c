@@ -1,4 +1,4 @@
-#include "drivers/fbtext.h"
+#include <drivers/fbtext.h>
 #include <drivers/serial.h>
 #include <klib/string.h>
 #include <klib/memory.h>
@@ -51,9 +51,17 @@ uint64_t syscall_common_handler(syscall_context_t *ctx) {
     {
         case SYS_WRITE:
         {
-            const char *s = (const char *)ctx->rsi;
-            fb_print(s, 0xAAAAAA);
-            return 0;
+            uint64_t fd = ctx->rdi;
+            const char *buf = (const char *)ctx->rsi;
+            uint64_t len = ctx->rdx;
+            
+            if (fd == 1) {
+                for (unsigned long i = 0; i < len; i++) {
+                    fb_put_char(buf[i], 0xAAAAAA);
+                }
+                return len;
+            }
+            return -1;
         }
 
         case SYS_EXIT:

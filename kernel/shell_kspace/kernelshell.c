@@ -3,13 +3,12 @@
 #include <drivers/keyboard.h>
 #include <colors.h>
 #include <generic/time.h>
-#include <generic/usermode.h>
 
 static void execute_command(const char* cmd) {
     if (!cmd || cmd[0] == '\0') return;
 
     if (strcmp(cmd, "help") == 0) {
-        fb_print("Available commands: help, clear, about, time, panic, userspace, halt\n", 0x00FF00);
+        fb_print("Available commands: help, clear, about, time, panic, halt\n", 0x00FF00);
     }
     else if (strcmp(cmd, "clear") == 0) { 
         fb_clear();
@@ -31,11 +30,6 @@ static void execute_command(const char* cmd) {
         fb_print("Halting system...\n", 0x00FFFF);
         asm volatile("cli; hlt");
         while (1) asm("hlt");
-    }
-    else if (strcmp(cmd, "userspace") == 0) {
-        fb_print("Running elf...\n", COL_INFO);
-        extern struct limine_file *user_module;
-        enter_usermode(user_module->address, user_module->size);
     }
     else {
         fb_print("Unknown command: ", 0xAA0000);

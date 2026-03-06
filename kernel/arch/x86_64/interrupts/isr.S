@@ -104,10 +104,47 @@ common:
     add $16, %rsp
     iretq
 
+.equ TASK_STACK_SIZE, 65536
+
 .global lapic_timer_isr
+.align 16
 lapic_timer_isr:
     PUSH_REGS
+
+    mov 128(%rsp), %rax
+    and $3, %rax
+    jz .from_kernel
+
+    mov current_task(%rip), %rbx
+    test %rbx, %rbx
+    jz .pick_next
+    mov %rsp, (%rbx)
+
+.pick_next:
     call lapic_timer_handler
+    mov current_task(%rip), %rax
+    test %rax, %rax
+    jz .no_task
+
+    mov 8(%rax), %rcx
+    mov %rcx, %cr3
+
+    mov 16(%rax), %rcx
+    add $65536, %rcx
+    lea tss(%rip), %rdx
+    mov %rcx, 4(%rdx)
+
+    mov (%rax), %rsp
+    movq $0x1B, 152(%rsp)
+    POP_REGS
+    iretq
+
+.from_kernel:
+    call lapic_timer_handler
+    POP_REGS
+    iretq
+
+.no_task:
     POP_REGS
     iretq
 

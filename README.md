@@ -18,7 +18,7 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Long mode + higher-half kernel - by Limine
 - ✅ Serial (COM1) debug output
 - ✅ Framebuffer text console (PSF2 font: Spleen 12x24)
-- ✅ GDT + TSS 
+- ✅ GDT + TSS
 - ✅ IDT + basic exception handlers - ISRs
 - ✅ ACPI parsing (RSDP, XSDT, MADT, HPET)
 - ✅ x2APIC support
@@ -29,11 +29,12 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ PS/2 keyboard driver
 - ✅ Temporarily kernelspace shell
 - ✅ Current UTC time with (boot_time via limine) + (tsc(time after boot))
-- ✅ Usermode support (iretq transition with isolated page tables)
+- ✅ Loading program in ring3
 - ✅ Elf loader (elf from limine module)
 - 🚧 Syscalls: read(0), write (1), exit(60)
 - 🚧 Userspace lib: crt0, printf
-- ✅ Userspace basic shell! -> [**usershell.c**](./userspace/programs/usershell.c)
+- ✅ A few example userspace programs in [userspace/programs](userspace/programs)
+- ✅ Preemptive round-robin scheduler (LAPIC TSC-deadline)
 
 ### Requirements
 - clang + ld.lld

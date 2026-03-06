@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 415 110" width="415" height="110">
+  <defs>
+    <style>
+      .kanji {
+        font-family: 'Hiragino Kaku Gothic Pro', 'Yu Gothic', 'Noto Sans JP', 'MS Gothic', sans-serif;
+        font-weight: 300;
+      }
+      .label {
+        font-family: 'Helvetica Neue', 'Arial', sans-serif;
+        font-weight: 200;
+        letter-spacing: 0.25em;
+      }
+    </style>
+  </defs>
+
+  <rect width="415" height="110" fill="#ffffff"/>
+
+  <text x="12" y="88" class="kanji" font-size="82" fill="#1a1a1a">ソンナ</text>
+
+  <circle cx="292" cy="68" r="3" fill="#BFBAB4"/>
+
+  <text x="310" y="82" class="label" font-size="50" fill="#8A857F">OS</text>
+
+</svg>

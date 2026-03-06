@@ -4,9 +4,9 @@
 .align 16
 
 syscall_handler:
-    sti
     swapgs
 
+    push    %r12
     mov     %rsp, %r12
     mov     tss+4(%rip), %rsp
 
@@ -46,7 +46,6 @@ syscall_handler:
     pop     %r15
 
     mov     %r12, %rsp
-
-    sti
+    pop     %r12
     swapgs
     sysretq

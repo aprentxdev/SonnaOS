@@ -59,15 +59,15 @@ void gdt_init(void) {
     gdt[3].limit_low = 0;
     gdt[3].base_low = 0;
     gdt[3].base_mid = 0;
-    gdt[3].access = 0xFA;
-    gdt[3].granularity = 0x20;
+    gdt[3].access = 0xF2;
+    gdt[3].granularity = 0x00;
     gdt[3].base_high = 0;
 
     gdt[4].limit_low = 0;
     gdt[4].base_low = 0;
     gdt[4].base_mid = 0;
-    gdt[4].access = 0xF2;
-    gdt[4].granularity = 0x00;
+    gdt[4].access = 0xFA;
+    gdt[4].granularity = 0x20;
     gdt[4].base_high = 0;
 
     uint64_t tss_addr = (uint64_t)&tss;

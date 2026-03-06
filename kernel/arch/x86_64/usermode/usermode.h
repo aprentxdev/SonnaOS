@@ -3,7 +3,9 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <arch/x86_64/usermode/scheduler.h>
 
-void enter_usermode(void *elf_data, size_t elf_size);
+void runElf_ring3(void *elf_data, size_t elf_size);
+void task_enter(task_t *task);
 
 #endif

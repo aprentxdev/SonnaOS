@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <arch/x86_64/cpu/msr.h>
 #include <drivers/keyboard.h>
+#include <arch/x86_64/usermode/usermode.h>
+#include <arch/x86_64/usermode/scheduler.h>
 
 extern void syscall_handler(void);
 
@@ -28,8 +30,7 @@ void syscalls_init(void)
 
     uint64_t star = 0;
     star |= ((uint64_t)KERNEL_CS) << 32;
-    star |= ((uint64_t)USER_CS) << 48;
-    star |= ((uint64_t)USER_CS) << 16;
+    star |= ((uint64_t)0x10) << 48;
     wrmsr(IA32_STAR_MSR, star);
 
     wrmsr(IA32_FMASK_MSR, (1ULL << 9));
@@ -114,11 +115,23 @@ uint64_t syscall_common_handler(syscall_context_t *ctx) {
 
         case SYS_EXIT:
         {
-            fb_print("\nUser program exited with code ", 0xAAAAAA);
+            fb_print("\n[task pid: ", 0xAAAAAA);
+            u64_to_dec(current_task->pid, buf);
+            fb_print(buf, 0xAAAAAA);
+            fb_print("] exited with code ", 0xAAAAAA);
             u64_to_dec(ctx->rdi, buf);
             fb_print(buf, 0xAAAAAA);
-            fb_print("\n", 0xAAAAAA);
-            while (1) asm volatile ("hlt");
+            fb_print("\n", 0);
+
+            current_task->state = TASK_DEAD;
+
+            task_t *next = scheduler_next();
+            if (!next) {
+                fb_print("no tasks left\n", 0xAAAAAA);
+                while (1) asm volatile("hlt");
+            }
+            task_enter(next);
+            __builtin_unreachable();
         }
 
         default:

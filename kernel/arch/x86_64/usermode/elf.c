@@ -5,8 +5,7 @@
 #include <mm/pmm.h>
 #include <klib/memory.h>
 #include <drivers/serial.h>
-
-#include "elf.h"
+#include <arch/x86_64/usermode/elf.h>
 
 bool load_elf(void *elf_data, uint64_t *pml4, uint64_t *entry_point_out) {
     Elf64_Ehdr *ehdr = (Elf64_Ehdr *)elf_data;

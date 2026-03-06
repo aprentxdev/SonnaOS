@@ -59,7 +59,7 @@ KERNEL_OBJECTS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(C_SOURCES)) \
                   $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(ASM_SOURCES))
 KERNEL_DEPENDS := $(KERNEL_OBJECTS:.o=.d)
 
-USER_PROGRAMS := usershell
+USER_PROGRAMS := task_a task_b task_c
 USER_LIB_SRC := $(shell find userspace/lib -name '*.c')
 USER_LIB_OBJ := $(patsubst userspace/lib/%.c,$(BUILD_DIR)/userspace/lib/%.o,$(USER_LIB_SRC))
 USER_CRT0_OBJ := $(BUILD_DIR)/userspace/crt0.o
@@ -124,7 +124,8 @@ esp: limine spleen $(TARGET) userspace limine.conf
 	cp $(TARGET) $(ESP_DIR)/boot/estella.elf
 	cp limine.conf $(ESP_DIR)/boot/limine/limine.conf
 	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/spleen/
-	cp $(BUILD_DIR)/usershell.elf $(ESP_DIR)/boot/user.elf
+	cp logo.raw $(ESP_DIR)/boot/logo.raw
+	$(foreach prog,$(USER_PROGRAMS),cp $(BUILD_DIR)/$(prog).elf $(ESP_DIR)/boot/$(prog).elf;)
 
 $(DISK_IMG): esp
 	rm -f $@
@@ -150,4 +151,4 @@ compdb:
 
 .PHONY: all userspace esp img run clean distclean compdb
 
--include $(DEPENDS)
+-include $(KERNEL_DEPENDS)

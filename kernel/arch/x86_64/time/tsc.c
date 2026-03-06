@@ -96,9 +96,16 @@ uint64_t tsc_calibrate(void) {
         if (freq) {
             serial_puts("TSC calibrated via HPET: ");
             char buf[32];
-            u64_to_dec(freq, buf);
+            uint64_t ghz = freq / 1000000000;
+            uint64_t mhz = (freq % 1000000000) / 1000000;
+            u64_to_dec(ghz, buf);
             serial_puts(buf);
-            serial_puts(" Hz\n");
+            serial_puts(".");
+            if (mhz < 100) serial_puts("0");
+            if (mhz < 10)  serial_puts("0");
+            u64_to_dec(mhz, buf);
+            serial_puts(buf);
+            serial_puts(" GHz\n");
         }
     }
 

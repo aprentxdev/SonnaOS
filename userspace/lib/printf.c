@@ -33,6 +33,26 @@ void printf(const char *fmt, ...) {
                     write(1, buf, len);
                     break;
                 }
+                case 'l': {
+                    fmt++;
+                    if (*fmt == 'l') {
+                        fmt++;
+                        if (*fmt == 'd') {
+                            long long d = va_arg(args, long long);
+                            len = itoa_signed((long)d, buf);
+                            write(1, buf, len);
+                        } else {
+                            write(1, "?", 1);
+                        }
+                    } else if (*fmt == 'd') {
+                        long d = va_arg(args, long);
+                        len = itoa_signed(d, buf);
+                        write(1, buf, len);
+                    } else {
+                        write(1, "?", 1);
+                    }
+                    break;
+                }
                 case '%':
                     write(1, "%", 1);
                     break;

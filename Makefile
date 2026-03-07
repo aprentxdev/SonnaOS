@@ -67,6 +67,9 @@ USER_CRT0_OBJ := $(BUILD_DIR)/userspace/crt0.o
 USER_PROG_OBJS := $(addprefix $(BUILD_DIR)/userspace/programs/,$(addsuffix .o,$(USER_PROGRAMS)))
 USER_ELFS := $(addprefix $(BUILD_DIR)/,$(addsuffix .elf,$(USER_PROGRAMS)))
 
+INITRD_DIR := $(BUILD_DIR)/INITRD_DIR
+INITRD := $(BUILD_DIR)/initrd.cpio
+
 all: limine spleen $(TARGET) userspace
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
@@ -118,14 +121,19 @@ spleen:
 		--wildcards '*.psfu' || true
 	rm -f $(SPLEEN_TAR)
 
-esp: limine spleen $(TARGET) userspace limine.conf
-	mkdir -p $(ESP_DIR)/EFI/BOOT $(ESP_DIR)/boot/limine $(ESP_DIR)/boot/spleen
+initrd: spleen userspace
+	mkdir -p $(INITRD_DIR)/bin $(INITRD_DIR)/fonts $(INITRD_DIR)/assets
+	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(INITRD_DIR)/fonts/
+	cp logo.raw $(INITRD_DIR)/assets/logo.raw
+	$(foreach prog,$(USER_PROGRAMS),cp $(BUILD_DIR)/$(prog).elf $(INITRD_DIR)/bin/$(prog).elf;)
+	cd $(INITRD_DIR) && find . | cpio -o --format=newc > ../../$(INITRD)
+
+esp: initrd limine spleen $(TARGET) userspace limine.conf
+	mkdir -p $(ESP_DIR)/EFI/BOOT $(ESP_DIR)/boot/limine
 	cp $(LIMINE_DIR)/BOOTX64.EFI $(ESP_DIR)/EFI/BOOT/BOOTX64.EFI
 	cp $(TARGET) $(ESP_DIR)/boot/estella.elf
 	cp limine.conf $(ESP_DIR)/boot/limine/limine.conf
-	cp $(SPLEEN_DIR)/spleen-12x24.psfu $(ESP_DIR)/boot/spleen/
-	cp logo.raw $(ESP_DIR)/boot/logo.raw
-	$(foreach prog,$(USER_PROGRAMS),cp $(BUILD_DIR)/$(prog).elf $(ESP_DIR)/boot/$(prog).elf;)
+	cp $(INITRD) $(ESP_DIR)/boot/initrd.cpio
 
 $(DISK_IMG): esp
 	rm -f $@

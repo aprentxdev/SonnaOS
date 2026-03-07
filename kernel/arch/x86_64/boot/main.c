@@ -22,6 +22,7 @@
 #include <arch/x86_64/syscalls/syscalls.h>
 #include <arch/x86_64/usermode/usermode.h>
 #include <arch/x86_64/usermode/scheduler.h>
+#include <fs/cpio/cpio.h>
 
 #define ESTELLA_VERSION "Estella v0.9.0-dev"
 
@@ -88,7 +89,7 @@ void hcf(void) {
     }
 }
 
-static void print_system_info(struct limine_framebuffer *fb, struct limine_file *logo) {
+static void print_system_info(struct limine_framebuffer *fb, void *logo) {
     fb_print("SonnaOS " ESTELLA_VERSION " (x86_64 UEFI)\n", COL_VERSION);
     fb_print("Development on: https://github.com/aprentxdev/SonnaOS\n", COL_VERSION);
 
@@ -138,7 +139,7 @@ static void print_system_info(struct limine_framebuffer *fb, struct limine_file 
         serial_puts("\n");
     }
 
-    if (!logo || !logo->address) return;
+    if (!logo) return;
 
     #define LOGO_W 447
     #define LOGO_H 126
@@ -146,7 +147,7 @@ static void print_system_info(struct limine_framebuffer *fb, struct limine_file 
     uint32_t logo_x = fb->width - LOGO_W - 750;
     uint32_t logo_y = 7;
 
-    uint32_t *pixels = (uint32_t *)logo->address;
+    uint32_t *pixels = (uint32_t *)logo;
     uint32_t *fb_ptr = (uint32_t *)fb->address;
     uint32_t  stride = fb->pitch / sizeof(uint32_t);
 
@@ -284,34 +285,15 @@ void EstellaEntry(void) {
     if (!framebuffer_request.response || framebuffer_request.response->framebuffer_count == 0) hcf();
     if (!hhdm_request.response || !memmap_request.response || !module_request.response || !rsdp_request.response) hcf();
 
-    // modules
+    // load initrd cpio from module
     int count_modules = module_request.response->module_count;
-    struct limine_file *fontmod = NULL;
-    struct limine_file *task_a_elf = NULL;
-    struct limine_file *task_b_elf = NULL;
-    struct limine_file *task_c_elf = NULL;
-    struct limine_file *logo = NULL;
-    
-    for(int i = 0; i < count_modules; i++) {
-        if (strcmp("spleen-12x24", module_request.response->modules[i]->string) == 0) {
-            fontmod = module_request.response->modules[i];
-        }
-        if (strcmp("task_a", module_request.response->modules[i]->string) == 0) {
-            task_a_elf = module_request.response->modules[i];
-        }
-        if (strcmp("task_b", module_request.response->modules[i]->string) == 0) {
-            task_b_elf = module_request.response->modules[i];
-        }
-        if (strcmp("task_c", module_request.response->modules[i]->string) == 0) {
-            task_c_elf = module_request.response->modules[i];
-        }
-        if (strcmp("logo_raw", module_request.response->modules[i]->string) == 0) {
-            logo = module_request.response->modules[i];
-        } 
-    }
+    if(count_modules < 1) serial_puts("missing initrd\n");
+    struct limine_file *initrdcpio = module_request.response->modules[0]; 
 
     // load font, init fbtext
-    struct psf2_header *psf2 = load_psf2_font(fontmod);
+    size_t font_size;
+    void* fontfile = cpio_lookup(initrdcpio, "fonts/spleen-12x24.psfu", &font_size);
+    struct psf2_header *psf2 = load_psf2_font(fontfile, font_size);
     if (!psf2) {
         serial_puts("failed to load font?\n");
         hcf();
@@ -319,7 +301,7 @@ void EstellaEntry(void) {
     font_t font = {
         .is_psf2 = true,
         .hdr.psf2 = psf2,
-        .glyphs = (const uint8_t *)fontmod->address + psf2->headersize,
+        .glyphs = (const uint8_t *)fontfile + psf2->headersize,
         .width = psf2->width,
         .height = psf2->height,
         .line_height = psf2->height + 1,
@@ -328,7 +310,9 @@ void EstellaEntry(void) {
     struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
     fbtext_init(fb, &font);
 
-    print_system_info(fb, logo); fb_print("\n", 0);
+    // system info & logo
+    void *logofile = cpio_lookup(initrdcpio, "assets/logo.raw", NULL);
+    print_system_info(fb, logofile); fb_print("\n", 0);
 
     // init everything
     gdt_init(); fb_print("GDT with TSS initialized;", COL_SUCCESS_INIT);
@@ -347,9 +331,10 @@ void EstellaEntry(void) {
     asm volatile("sti");
     scheduler_init(); fb_print("Scheduler initialized\n", COL_SUCCESS_INIT);
 
-    task_t *t1 = task_create_from_elf(task_a_elf->address); fb_print("TASK_A created! ", COL_TITLE);
-    task_t *t2 = task_create_from_elf(task_b_elf->address); fb_print("TASK_B created! ", COL_TITLE);
-    task_t *t3 = task_create_from_elf(task_c_elf->address); fb_print("TASK_C created!\n", COL_TITLE);
+    // create tasks, jump to ring3
+    task_t *t1 = task_create_from_elf(cpio_lookup(initrdcpio, "bin/task_a.elf", NULL)); fb_print("TASK_A created! ", COL_TITLE);
+    task_t *t2 = task_create_from_elf(cpio_lookup(initrdcpio, "bin/task_b.elf", NULL)); fb_print("TASK_B created! ", COL_TITLE);
+    task_t *t3 = task_create_from_elf(cpio_lookup(initrdcpio, "bin/task_c.elf", NULL)); fb_print("TASK_C created!\n", COL_TITLE);
     scheduler_add_task(t1); fb_print("TASK_A in queue! ", COL_TITLE);
     scheduler_add_task(t2); fb_print("TASK_B in queue! ", COL_TITLE);
     scheduler_add_task(t3); fb_print("TASK_C in queue!\n", COL_TITLE);

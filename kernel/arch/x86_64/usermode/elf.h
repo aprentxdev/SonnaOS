@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ESTELLA_ARCH_X86_64_USERMODE_ELF_H
+#define ESTELLA_ARCH_X86_64_USERMODE_ELF_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -36,3 +37,5 @@ typedef struct {
     uint64_t p_memsz;
     uint64_t p_align;
 } Elf64_Phdr;
+
+#endif

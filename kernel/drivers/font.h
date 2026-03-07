@@ -43,7 +43,7 @@ struct psf2_header {
     uint32_t width;
 };
 
-struct psf1_header* load_psf1_font(struct limine_file *module);
-struct psf2_header* load_psf2_font(struct limine_file *module);
+struct psf1_header* load_psf1_font(void* fontfile);
+struct psf2_header* load_psf2_font(void* fontfile, size_t size);
 
 #endif

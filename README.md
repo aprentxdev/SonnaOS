@@ -32,7 +32,7 @@ Writing an operating system to explore low-level architecture and hardware progr
 - ✅ Current UTC time with (boot_time via limine) + (tsc(time after boot))
 - ✅ Loading program in ring3
 - ✅ Elf loader
-- 🚧 Syscalls: read(0), write (1), exit(60)
+- 🚧 Syscalls: read(0), write (1), getpid(39), exit(60)
 - 🚧 Userspace lib: crt0, printf
 - ✅ A few example userspace programs in [userspace/programs](userspace/programs)
 - ✅ Preemptive round-robin scheduler (LAPIC TSC-deadline)

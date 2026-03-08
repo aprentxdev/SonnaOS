@@ -1,9 +1,10 @@
+#include "syscalls.h"
 #include <printf.h>
 #include <stdint.h>
 
 int main(void)
 {
-    printf("[Task A] started (return 42 after 4 'ping')\n");
+    printf("[Task A] (pid: %lld) started (return 42 after 4 'ping')\n", getpid());
 
     for (long long i = 0; ; i++)
     {

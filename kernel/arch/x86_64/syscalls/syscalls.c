@@ -40,6 +40,7 @@ void syscalls_init(void)
 
 #define SYS_READ  0
 #define SYS_WRITE 1
+#define SYS_GETPID 39
 #define SYS_EXIT 60
 
 static char buf[64];
@@ -111,6 +112,11 @@ uint64_t syscall_common_handler(syscall_context_t *ctx) {
                     }
                 }
             }
+        }
+        
+        case SYS_GETPID:
+        {
+            return current_task->pid;
         }
 
         case SYS_EXIT:

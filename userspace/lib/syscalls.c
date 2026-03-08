@@ -1,5 +1,16 @@
 #include "syscalls.h"
 
+long syscall0(long n) {
+    long ret;
+    asm volatile(
+        "syscall\n"
+        : "=a"(ret)
+        : "a"(n)
+        : "rcx", "r11", "memory"
+    );
+    return ret;
+}
+
 long syscall1(long n, long arg1)
 {
     long ret;
@@ -32,6 +43,10 @@ long write(int fd, const void *buf, unsigned long count)
 long read(int fd, void *buf, unsigned long count)
 {
     return syscall3(SYS_READ, fd, (long)buf, count);
+}
+
+long getpid(void) {
+    return syscall0(SYS_GETPID);
 }
 
 void _exit(int status)
